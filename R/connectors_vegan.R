@@ -1,0 +1,215 @@
+#' Run PERMANOVA via vegan::adonis2
+#'
+#' Executes Permutational Multivariate Analysis of Variance using `vegan::adonis2`
+#' on a `tidy_microbiome` object and returns a clean, tidy tibble.
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @param formula A model formula specifying predictors from sample metadata (e.g. `~ treatment + diet`).
+#'   If the left-hand side is omitted, the community matrix is automatically supplied.
+#' @param assay Assay name to use. Defaults to `"counts"`.
+#' @param method Distance metric to pass to `vegan::adonis2` (e.g. `"bray"`, `"jaccard"`). Defaults to `"bray"`.
+#' @param permutations Number of permutations. Defaults to `999`.
+#' @param by How terms are assessed: `"terms"`, `"margin"`, or `NULL`. Defaults to `"terms"`.
+#' @param ... Additional arguments passed to `vegan::adonis2`.
+#' @return A tidy tibble with columns:
+#'   \itemize{
+#'     \item `term`: Predictor name, Residual, or Total.
+#'     \item `df`: Degrees of freedom.
+#'     \item `sum_sq`: Sum of squares.
+#'     \item `r2`: Coefficient of determination (\eqn{R^2}).
+#'     \item `f_stat`: Pseudo-F statistic.
+#'     \item `p_value`: Permutation p-value.
+#'   }
+#' @export
+run_permanova <- function(tb, formula, assay = "counts", method = "bray", permutations = 999, by = "terms", ...) {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  if (!requireNamespace("vegan", quietly = TRUE)) {
+    stop("Package 'vegan' is required for `run_permanova()`. Please install it.", call. = FALSE)
+  }
+
+  veg <- to_vegan(tb, assay = assay)
+  comm <- veg$comm
+  env <- as.data.frame(veg$env)
+  rownames(env) <- env$sample_id
+
+  # Ensure left-hand side of formula references the community matrix
+  f_char <- deparse(formula)
+  if (startsWith(f_char, "~")) {
+    formula <- stats::as.formula(paste("comm", f_char))
+  }
+
+  ad_res <- vegan::adonis2(
+    formula = formula,
+    data = env,
+    method = method,
+    permutations = permutations,
+    by = by,
+    ...
+  )
+
+  # Convert adonis2 table to tidy tibble
+  res_df <- as.data.frame(ad_res)
+  terms <- rownames(res_df)
+
+  df_out <- tibble::tibble(
+    term = terms,
+    df = as.numeric(res_df$Df),
+    sum_sq = as.numeric(res_df$SumOfSqs),
+    r2 = if ("R2" %in% colnames(res_df)) as.numeric(res_df$R2) else NA_real_,
+    f_stat = if ("F" %in% colnames(res_df)) as.numeric(res_df$F) else NA_real_,
+    p_value = if ("Pr(>F)" %in% colnames(res_df)) as.numeric(res_df$`Pr(>F)`) else NA_real_
+  )
+
+  attr(df_out, "method") <- method
+  attr(df_out, "permutations") <- permutations
+  attr(df_out, "by") <- by
+
+  df_out
+}
+
+#' Test for Homogeneity of Multivariate Dispersions via vegan::betadisper
+#'
+#' Quantifies and tests within-group multivariate dispersion using `vegan::betadisper`
+#' and permutation tests, returning tidy summary tibbles.
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @param group Character string naming the grouping variable in sample metadata.
+#' @param assay Assay name to use. Defaults to `"counts"`.
+#' @param method Distance metric to compute (e.g. `"bray"`, `"jaccard"`). Defaults to `"bray"`.
+#' @param permutations Number of permutations for dispersion test. Defaults to `999`.
+#' @param ... Additional arguments passed to `vegan::betadisper`.
+#' @return An S3 object of class `tidybiome_betadisper` containing:
+#'   \itemize{
+#'     \item `sample_distances`: Tibble with `sample_id`, `group`, and `distance_to_centroid`.
+#'     \item `group_summary`: Tibble with per-group counts, mean distances, and standard errors.
+#'     \item `test`: Tibble with F-statistic, degrees of freedom, and permutation p-value.
+#'   }
+#' @export
+run_betadisper <- function(tb, group, assay = "counts", method = "bray", permutations = 999, ...) {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  if (!requireNamespace("vegan", quietly = TRUE)) {
+    stop("Package 'vegan' is required for `run_betadisper()`. Please install it.", call. = FALSE)
+  }
+  if (!group %in% colnames(tb)) {
+    stop(sprintf("Group '%s' not found in sample metadata.", group), call. = FALSE)
+  }
+
+  veg <- to_vegan(tb, assay = assay)
+  comm <- veg$comm
+  group_vec <- as.factor(veg$env[[group]])
+
+  dist_mat <- vegan::vegdist(comm, method = method)
+  dots <- list(...)
+  if (!"add" %in% names(dots)) {
+    dots$add <- "lingoes"
+  }
+  dots$d <- dist_mat
+  dots$group <- group_vec
+
+  mod <- do.call(vegan::betadisper, dots)
+  perm_test <- vegan::permutest(mod, permutations = permutations)
+
+  # Sample distances tibble
+  sample_dist_df <- tibble::tibble(
+    sample_id = rownames(comm),
+    group = group_vec,
+    distance_to_centroid = as.numeric(mod$distances)
+  )
+
+  # Group summary
+  group_summary_df <- sample_dist_df %>%
+    dplyr::group_by(.data$group) %>%
+    dplyr::summarise(
+      n = dplyr::n(),
+      mean_distance = mean(.data$distance_to_centroid, na.rm = TRUE),
+      se = stats::sd(.data$distance_to_centroid, na.rm = TRUE) / sqrt(dplyr::n()),
+      .groups = "drop"
+    )
+
+  # Test table
+  tab <- as.data.frame(perm_test$tab)
+  test_df <- tibble::tibble(
+    term = rownames(tab)[1],
+    df = as.numeric(tab$Df[1]),
+    sum_sq = as.numeric(tab$`Sum Sq`[1]),
+    mean_sq = as.numeric(tab$`Mean Sq`[1]),
+    f_stat = as.numeric(tab$F[1]),
+    p_value = as.numeric(tab$`Pr(>F)`[1])
+  )
+
+  res <- list(
+    sample_distances = sample_dist_df,
+    group_summary = group_summary_df,
+    test = test_df,
+    model = mod
+  )
+  class(res) <- c("tidybiome_betadisper", "list")
+  res
+}
+
+#' @export
+print.tidybiome_betadisper <- function(x, ...) {
+  cat("── tidybiome_betadisper (Multivariate Dispersion Test) ──\n")
+  cat(sprintf("  • Statistic F: %.4f (p = %.4f)\n", x$test$f_stat[1], x$test$p_value[1]))
+  cat("  • Group centroids:\n")
+  for (i in seq_len(nrow(x$group_summary))) {
+    cat(sprintf("    - %s: mean distance = %.4f (± %.4f)\n",
+                x$group_summary$group[i],
+                x$group_summary$mean_distance[i],
+                x$group_summary$se[i]))
+  }
+  invisible(x)
+}
+
+#' Run Non-Metric Multidimensional Scaling via vegan::metaMDS
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @param assay Assay name to use. Defaults to `"counts"`.
+#' @param method Dissimilarity index to pass to `vegan::metaMDS`. Defaults to `"bray"`.
+#' @param k Number of dimensions. Defaults to `2`.
+#' @param trymax Maximum number of random starts. Defaults to `50`.
+#' @param trace Numeric trace output (0 for silent). Defaults to `0`.
+#' @param ... Additional arguments passed to `vegan::metaMDS`.
+#' @return A tibble of ordination coordinates (`NMDS1`, `NMDS2`, etc.) joined with sample metadata,
+#'   with `stress` stored as an attribute.
+#' @export
+run_nmds <- function(tb, assay = "counts", method = "bray", k = 2, trymax = 50, trace = 0, ...) {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  if (!requireNamespace("vegan", quietly = TRUE)) {
+    stop("Package 'vegan' is required for `run_nmds()`. Please install it.", call. = FALSE)
+  }
+
+  veg <- to_vegan(tb, assay = assay)
+  comm <- veg$comm
+
+  nmds_mod <- vegan::metaMDS(
+    comm = comm,
+    distance = method,
+    k = k,
+    trymax = trymax,
+    trace = trace,
+    ...
+  )
+
+  # Extract points
+  coords <- as.data.frame(nmds_mod$points)
+  colnames(coords) <- paste0("NMDS", seq_len(ncol(coords)))
+  coords$sample_id <- rownames(coords)
+
+  # Join with sample metadata
+  meta_df <- tibble::as_tibble(tb)
+  out <- dplyr::left_join(coords, meta_df, by = "sample_id")
+  out <- tibble::as_tibble(out)
+
+  attr(out, "stress") <- nmds_mod$stress
+  attr(out, "converged") <- nmds_mod$converged
+  attr(out, "method") <- method
+
+  out
+}

@@ -27,7 +27,8 @@ Suggests:
     testthat (>= 3.0.0),
     knitr,
     rmarkdown,
-    ape
+    vegan (>= 2.6-0),
+    ape (>= 5.0)
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.1.0

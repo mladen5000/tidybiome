@@ -2,9 +2,12 @@
 % Please edit documentation in R/bridges.R
 \name{to_phyloseq}
 \alias{to_phyloseq}
+\alias{as_phyloseq}
 \title{Convert tidy_microbiome to phyloseq Object}
 \usage{
 to_phyloseq(tb)
+
+as_phyloseq(tb)
 }
 \arguments{
 \item{tb}{A \code{tidy_microbiome} object.}
@@ -14,4 +17,6 @@ A \code{phyloseq::phyloseq} object.
 }
 \description{
 Convert tidy_microbiome to phyloseq Object
+
+Convert tidy_microbiome to phyloseq Object (Alias)
 }

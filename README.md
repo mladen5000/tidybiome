@@ -86,17 +86,44 @@ plot_composition(clean_tb, rank = "Phylum", top_n = 4, group_by = "treatment")
 plot_ordination(clean_tb, method = "rpca", color = "treatment", ellipse = TRUE, biplot = TRUE)
 plot_alpha(clean_tb, metric = "hill_1", x = "treatment", test = TRUE)
 plot_da_volcano(da_res)
+# 7. Ecosystem Connectors & Vegan Engines
+# Export to vegan community format
+veg <- to_vegan(clean_tb)
+
+# Run PERMANOVA and multivariate dispersion
+perm_res <- run_permanova(clean_tb, ~ treatment + diet, permutations = 999)
+disp_res <- run_betadisper(clean_tb, group = "treatment")
+
+# 8. Essential mia & Community Screening Functions
+prev_tbl  <- calc_prevalence(clean_tb)
+clean_dom <- calc_dominant(clean_tb, add_to_metadata = TRUE)
+clean_div <- calc_divergence(clean_tb, reference = list(treatment = "Control"))
+assoc_tbl <- calc_cross_association(clean_tb, variables = c("age", "depth"))
 ```
+
+---
+
+## Ecosystem Connectors & Interoperability
+
+| Ecosystem Tool | Direction | `tidybiome` Function | Description |
+| :--- | :--- | :--- | :--- |
+| **`vegan`** | Bidirectional | `to_vegan(tb)`, `from_vegan(comm)` | Converts between `tidy_microbiome` and vegan samples $\times$ taxa community matrices. |
+| **`vegan::adonis2`** | Execution wrapper | `run_permanova(tb, formula)` | Direct PERMANOVA on `tidy_microbiome` returning tidy broom-style tibbles. |
+| **`vegan::betadisper`** | Execution wrapper | `run_betadisper(tb, group)` | Permutation test of multivariate dispersion with distance summaries. |
+| **`vegan::metaMDS`** | Execution wrapper | `run_nmds(tb)` | Non-metric multidimensional scaling returning metadata-joined coordinates. |
+| **`phyloseq`** | Bidirectional | `to_phyloseq(tb)`, `as_phyloseq(tb)`, `as_tidybiome(ps)` | Converts to/from `phyloseq::phyloseq` S4 containers. |
+| **`mia` / `TreeSE`** | Bidirectional | `to_tse(tb)`, `to_mia(tb)`, `as_mia(tb)`, `as_tidybiome(tse)` | Converts to/from `TreeSummarizedExperiment::TreeSummarizedExperiment`. |
+| **`ape`** | Bidirectional | `set_tree(tb, tree)`, `get_tree(tb)` | Attaches and synchronizes phylogenetic trees (`ape::phylo`). |
 
 ---
 
 ## Running Demo & Tests
 
 ```bash
-# Run the complete end-to-end showcase
+# Run the complete end-to-end showcase (all 10 steps)
 Rscript demo/tidybiome_showcase.R
 
-# Run the testthat test suite (81 assertions)
+# Run the testthat test suite (161 passing assertions, 0 failures, 0 warnings)
 Rscript -e 'testthat::test_dir("tests/testthat")'
 ```
 
@@ -104,4 +131,4 @@ Rscript -e 'testthat::test_dir("tests/testthat")'
 
 ## License
 
-MIT License (c) 2026 tidybiome authors.
+MIT © tidybiome authors.

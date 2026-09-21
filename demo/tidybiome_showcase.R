@@ -85,4 +85,45 @@ p_alph <- plot_alpha(gut_clean, metric = "hill_1", x = "treatment", test = TRUE)
 p_volc <- plot_da_volcano(da_results)
 p_core <- plot_core(core_results)
 
-message(">>> SUCCESS: Full tidybiome pipeline completed with zero errors!")
+# 10. Ecosystem Connectors & mia Functions
+message("\n--- Step 10: Ecosystem Connectors (vegan, phyloseq, mia) & Advanced Screening ---")
+# 10a. Vegan export & PERMANOVA
+veg <- to_vegan(gut_clean, assay = "counts")
+print(veg)
+
+perm_res <- run_permanova(gut_clean, ~ treatment + diet, permutations = 199)
+cat("\nTidy PERMANOVA (vegan::adonis2):\n")
+print(perm_res)
+
+disp_res <- run_betadisper(gut_clean, group = "treatment", permutations = 199)
+print(disp_res)
+
+# 10b. Prevalence & Dominance
+prev_tbl <- calc_prevalence(gut_clean)
+cat("\nTop 3 Prevalent Taxa:\n")
+print(head(prev_tbl[, c("taxon_id", "Phylum", "prevalence", "mean_abundance")], 3))
+
+gut_dom <- calc_dominant(gut_clean, add_to_metadata = TRUE)
+cat("\nIdentified Dominant Taxa per Sample (added to metadata):\n")
+print(table(gut_dom$dominant_taxa))
+
+# 10c. Sample Divergence from Control
+gut_div <- calc_divergence(gut_clean, reference = list(treatment = "Control"), method = "bray")
+cat("\nMean Bray-Curtis Divergence to Control Baseline:\n")
+cat(sprintf("  • Control Samples:  %.4f\n", mean(gut_div$divergence[gut_div$treatment == "Control"])))
+cat(sprintf("  • Treated Samples:  %.4f\n", mean(gut_div$divergence[gut_div$treatment == "Treated"])))
+
+# 10d. Taxon x Metadata Cross-Association
+assoc_res <- calc_cross_association(gut_clean, variables = c("age", "depth"))
+cat("\nTop 4 Cross-Associations with Host Covariates:\n")
+print(head(assoc_res[, c("taxon_id", "variable", "correlation", "padj")], 4))
+
+# 10e. ape Tree Integration
+taxa_ids <- attr(gut_clean, "tax_table")$taxon_id
+set.seed(123)
+tree <- ape::rtree(length(taxa_ids), tip.label = taxa_ids)
+gut_with_tree <- set_tree(gut_clean, tree)
+cat(sprintf("\nSuccessfully attached ape::phylo tree with %d tips.\n", length(get_tree(gut_with_tree)$tip.label)))
+
+message("\n>>> SUCCESS: Full tidybiome pipeline completed with zero errors!")
+

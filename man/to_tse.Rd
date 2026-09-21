@@ -2,9 +2,15 @@
 % Please edit documentation in R/bridges.R
 \name{to_tse}
 \alias{to_tse}
+\alias{as_mia}
+\alias{to_mia}
 \title{Convert tidy_microbiome to TreeSummarizedExperiment Object}
 \usage{
 to_tse(tb)
+
+as_mia(tb)
+
+to_mia(tb)
 }
 \arguments{
 \item{tb}{A \code{tidy_microbiome} object.}
@@ -14,4 +20,6 @@ A \code{TreeSummarizedExperiment::TreeSummarizedExperiment} object.
 }
 \description{
 Convert tidy_microbiome to TreeSummarizedExperiment Object
+
+Convert tidy_microbiome to TreeSummarizedExperiment / mia Object (Aliases)
 }

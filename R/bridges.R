@@ -202,3 +202,70 @@ as_tidybiome.tidybiome_vegan <- function(x, ...) {
   from_vegan(comm = x$comm, env = x$env, ...)
 }
 
+#' Convert tidy_microbiome to phyloseq Object (Alias)
+#'
+#' @rdname to_phyloseq
+#' @export
+as_phyloseq <- function(tb) {
+  to_phyloseq(tb)
+}
+
+#' Convert tidy_microbiome to TreeSummarizedExperiment / mia Object (Aliases)
+#'
+#' @rdname to_tse
+#' @export
+as_mia <- function(tb) {
+  to_tse(tb)
+}
+
+#' @rdname to_tse
+#' @export
+to_mia <- function(tb) {
+  to_tse(tb)
+}
+
+#' Get Phylogenetic Tree from tidy_microbiome
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @return An `ape::phylo` object, or `NULL` if none is attached.
+#' @export
+get_tree <- function(tb) {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  attr(tb, "phy_tree")
+}
+
+#' Attach and Validate Phylogenetic Tree to tidy_microbiome
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @param tree An `ape::phylo` object.
+#' @param prune Logical; if `TRUE`, automatically prunes the tree to match taxon IDs present in `tb`. Defaults to `TRUE`.
+#' @return A `tidy_microbiome` object with the attached tree.
+#' @export
+set_tree <- function(tb, tree, prune = TRUE) {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  if (!inherits(tree, "phylo")) {
+    stop("`tree` must be an object of class 'phylo' (from package ape).", call. = FALSE)
+  }
+
+  taxa <- attr(tb, "tax_table")$taxon_id
+  common_tips <- intersect(tree$tip.label, taxa)
+
+  if (length(common_tips) == 0) {
+    stop("No tree tip labels match the taxon IDs in `tb`.", call. = FALSE)
+  }
+
+  if (prune && length(tree$tip.label) > length(common_tips)) {
+    if (requireNamespace("ape", quietly = TRUE)) {
+      tree <- ape::keep.tip(tree, common_tips)
+    }
+  }
+
+  attr(tb, "phy_tree") <- tree
+  tb
+}
+
+

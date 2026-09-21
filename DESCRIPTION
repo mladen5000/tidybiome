@@ -1,0 +1,33 @@
+Package: tidybiome
+Type: Package
+Title: Tidyverse-Native Modern Microbiome Analysis Suite
+Version: 0.1.0
+Authors@R: person("Tidybiome", "Authors", email = "info@tidybiome.org", role = c("aut", "cre"))
+Description: A modern, tidyverse-native Swiss Army knife for downstream microbiome
+    analysis. Implements state-of-the-art bioRxiv and literature methodologies for
+    compositional transformation (Robust CLR), alpha diversity (unified Hill numbers
+    profile), beta diversity (Robust Aitchison distance), ordination (RPCA biplots),
+    multi-engine consensus differential abundance testing, and data-driven core microbiome
+    discovery, paired with publication-grade aesthetic visualizations.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+Depends:
+    R (>= 4.1.0)
+Imports:
+    tibble (>= 3.1.0),
+    dplyr (>= 1.0.0),
+    rlang (>= 1.0.0),
+    ggplot2 (>= 3.4.0),
+    stats,
+    utils,
+    methods
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    ape
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.1.0

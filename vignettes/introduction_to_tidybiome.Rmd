@@ -1,0 +1,100 @@
+---
+title: "Introduction to tidybiome: A Modern, Tidyverse-Native Microbiome Suite"
+author: "tidybiome authors"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to tidybiome: A Modern, Tidyverse-Native Microbiome Suite}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+## 1. Introduction
+
+`tidybiome` brings the microbiome data science workflow into the modern **tidyverse** ecosystem. Inspired by Bioconductor's `mia` and legacy `phyloseq`, `tidybiome` acts as a simpler, more aesthetic "Swiss Army knife" that prioritizes state-of-the-art methods from recent literature and bioRxiv preprints:
+
+* **Container Ergonomics**: Objects of class `tidy_microbiome` inherit directly from `tbl_df`, enabling native `dplyr` verbs (`filter`, `mutate`, `select`, `arrange`, `slice`) while keeping count assays, taxonomic tables, and phylogenetic trees synchronized under the hood.
+* **Modern Compositional Data Analysis (CoDA)**: Replaces pseudocount heuristics and arbitrary rarefaction with **Robust CLR (rCLR)** and **Robust Aitchison Distance** (Martino et al., 2019).
+* **Unified Diversity Profiles**: Calculates Hill numbers profiles ($q=0, 1, 2$) on the intuitive scale of effective species.
+* **Dimensionality Reduction**: Implements **Robust PCA (RPCA)** singular value decomposition for compositional biplots with true taxon loading vectors.
+* **Consensus Differential Abundance**: Inspired by 2024–2025 bioRxiv preprints (*ConsensusMetaDA*, *dar*, *LinDA*), combines multiple robust engines (LinDA, CLR-linear models, Wilcoxon) with Cauchy combination tests and agreement voting to avoid false discoveries.
+* **Publication-Grade Visuals**: Intelligent top-$N$ pooling, colorblind-safe palettes, and minimalist styling via `theme_tidybiome()`.
+
+---
+
+## 2. Quickstart Workflow
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidybiome)
+library(dplyr)
+library(ggplot2)
+
+# Load the built-in benchmark dataset
+data("gut_microbiome", package = "tidybiome")
+gut_microbiome
+```
+
+### 2.1 Tidy Filtering and Mutation
+Because `gut_microbiome` is a tibble on the outside, you can filter and manipulate metadata naturally:
+
+```{r tidy_verbs}
+gut_sub <- gut_microbiome |>
+  filter(depth > 12000) |>
+  mutate(log_depth = log10(depth))
+```
+
+### 2.2 Modern Compositional Transformation (rCLR)
+```{r rclr}
+gut_sub <- transform_abundance(gut_sub, method = "rclr")
+```
+
+### 2.3 Alpha Diversity (Unified Hill Numbers)
+```{r alpha}
+gut_sub <- calc_alpha_diversity(gut_sub, metrics = c("hill", "shannon"))
+gut_sub |>
+  select(sample_id, treatment, hill_0, hill_1, hill_2) |>
+  head(5)
+```
+
+### 2.4 Beta Diversity & RPCA Biplot
+```{r beta_ord}
+gut_sub <- calc_beta_diversity(gut_sub, metric = "raitchison")
+gut_sub <- calc_ordination(gut_sub, method = "rpca")
+```
+
+### 2.5 Multi-Engine Consensus Differential Abundance
+```{r da}
+da_res <- calc_differential_abundance(
+  gut_sub,
+  group = "treatment",
+  methods = c("consensus", "linda", "clr_linear", "wilcoxon")
+)
+
+# Inspect top biomarkers
+da_res |>
+  filter(is_significant) |>
+  select(taxon_id, Phylum, Genus, log2fc, padj_consensus, agreement_score) |>
+  head(6)
+```
+
+### 2.6 Publication-Grade Visuals
+```{r plots, eval=FALSE}
+# Taxonomic composition with intelligent top-N grouping
+plot_composition(gut_sub, rank = "Phylum", top_n = 4, group_by = "treatment")
+
+# RPCA Biplot with 95% confidence ellipses and driving taxon vectors
+plot_ordination(gut_sub, method = "rpca", color = "treatment", ellipse = TRUE, biplot = TRUE)
+
+# Alpha diversity comparison
+plot_alpha(gut_sub, metric = "hill_1", x = "treatment", test = TRUE)
+
+# Biomarker volcano plot
+plot_da_volcano(da_res)
+```

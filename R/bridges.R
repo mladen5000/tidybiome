@@ -10,6 +10,9 @@ as_tidybiome <- function(x, ...) {
 
 #' @export
 as_tidybiome.default <- function(x, sample_data = NULL, tax_table = NULL, phy_tree = NULL, ...) {
+  if (inherits(x, "tidybiome_vegan")) {
+    return(from_vegan(comm = x$comm, env = x$env, tax_table = tax_table, phy_tree = phy_tree, ...))
+  }
   if (inherits(x, "phyloseq")) {
     return(from_phyloseq(x))
   }
@@ -128,3 +131,74 @@ to_tse <- function(tb) {
     rowTree = ptree
   )
 }
+
+#' Convert tidy_microbiome to vegan Community and Environmental Format
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @param assay Name of assay to extract. Defaults to `"counts"`.
+#' @return An S3 object of class `tidybiome_vegan` containing:
+#'   \itemize{
+#'     \item `comm`: Community matrix with samples in rows and taxa in columns.
+#'     \item `env`: Sample metadata tibble.
+#'   }
+#' @export
+to_vegan <- function(tb, assay = "counts") {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  assays <- attr(tb, "assays")
+  if (!assay %in% names(assays)) {
+    stop(sprintf("Assay '%s' not found in `tb`.", assay), call. = FALSE)
+  }
+
+  mat <- assays[[assay]]
+  # Vegan expects samples in rows and taxa in columns
+  comm <- t(mat)
+
+  env_df <- as.data.frame(tibble::as_tibble(tb))
+  rownames(env_df) <- env_df$sample_id
+
+  res <- list(comm = comm, env = tibble::as_tibble(env_df), env_df = env_df)
+  class(res) <- c("tidybiome_vegan", "list")
+  res
+}
+
+#' @export
+print.tidybiome_vegan <- function(x, ...) {
+  cat(sprintf("── tidybiome_vegan [%d samples × %d taxa] ──\n", nrow(x$comm), ncol(x$comm)))
+  cat(sprintf("  • Community matrix: %d rows × %d columns\n", nrow(x$comm), ncol(x$comm)))
+  cat(sprintf("  • Environmental metadata: %d variables (%s)\n", ncol(x$env), paste(head(names(x$env), 4), collapse = ", ")))
+  invisible(x)
+}
+
+#' Construct tidy_microbiome from vegan Community Format
+#'
+#' @param comm Community matrix or data frame with samples in rows and taxa in columns.
+#' @param env Optional sample metadata data frame.
+#' @param tax_table Optional taxonomy data frame.
+#' @param phy_tree Optional phylogenetic tree.
+#' @return A `tidy_microbiome` object.
+#' @export
+from_vegan <- function(comm, env = NULL, tax_table = NULL, phy_tree = NULL) {
+  if (!is.matrix(comm) && !is.data.frame(comm)) {
+    stop("`comm` must be a matrix or data frame.", call. = FALSE)
+  }
+  comm_mat <- as.matrix(comm)
+  # Transpose to tidy_microbiome convention: taxa in rows, samples in columns
+  counts <- t(comm_mat)
+
+  if (is.null(rownames(comm_mat))) {
+    colnames(counts) <- paste0("Sample_", seq_len(ncol(counts)))
+  }
+  if (is.null(colnames(comm_mat))) {
+    rownames(counts) <- paste0("Taxon_", seq_len(nrow(counts)))
+  }
+
+  tidy_microbiome(counts = counts, sample_data = env, tax_table = tax_table, phy_tree = phy_tree)
+}
+
+#' @export
+as_tidybiome.tidybiome_vegan <- function(x, ...) {
+  from_vegan(comm = x$comm, env = x$env, ...)
+}
+

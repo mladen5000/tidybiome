@@ -27,3 +27,24 @@ test_that("Bray-Curtis and JSD distances calculate valid dissimilarities", {
   d_jsd <- get_distance(tb_jsd, "jsd")
   expect_true(all(d_jsd >= 0))
 })
+
+test_that("Tree-Wasserstein and DTH test evaluate beta diversity and homogeneity", {
+  counts <- matrix(c(50, 10, 5, 2,
+                     5,  40, 50, 60), nrow = 2, byrow = TRUE,
+                   dimnames = list(c("T1", "T2"), c("S1", "S2", "S3", "S4")))
+  sample_data <- data.frame(sample_id = c("S1", "S2", "S3", "S4"), group = c("A", "A", "B", "B"))
+  tax_table <- data.frame(taxon_id = c("T1", "T2"), Phylum = c("Bacteroidota", "Firmicutes"))
+  tb <- tidy_microbiome(counts, sample_data, tax_table)
+
+  # Tree-Wasserstein distance
+  tb_w <- calc_beta_diversity(tb, metric = "wasserstein")
+  d_w <- get_distance(tb_w, "wasserstein")
+  expect_s3_class(d_w, "dist")
+  expect_true(all(d_w >= 0))
+
+  # DTH test for homogeneity
+  dth_res <- dth_test(tb_w, group = "group", metric = "wasserstein", n_perm = 49)
+  expect_s3_class(dth_res, "tbl_df")
+  expect_true(all(c("statistic", "p_value", "n_perm") %in% colnames(dth_res)))
+  expect_true(dth_res$p_value >= 0 && dth_res$p_value <= 1)
+})

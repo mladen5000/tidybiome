@@ -24,17 +24,17 @@ Traditional microbiome workflows (e.g. `phyloseq` or Bioconductor's `mia` / `Tre
 
 ---
 
-## Comparison: `tidybiome` vs Classic Tools
+## Comparison: `tidybiome` vs `phyloseq`, `mia`, and `vegan`
 
-| Analysis Area | Classic `phyloseq` / `mia` | `tidybiome` Modern SOTA Method |
+| Analysis Area | Standard in `phyloseq` / `mia` / `vegan` | `tidybiome` Methods Not in Standard Packages |
 | :--- | :--- | :--- |
-| **Object System** | S4 (`phyloseq`, `TreeSummarizedExperiment`) | S3 `tidy_microbiome` inheriting from `tbl_df` (native `dplyr`) |
-| **Normalization** | Rarefaction, pseudocount CLR | **Robust CLR (rCLR)** & **Coverage Standardization** |
-| **Alpha Diversity** | Disconnected Shannon, Simpson, Chao1 | **Unified Hill Numbers Profile ($q=0, 1, 2$)** |
-| **Beta Diversity** | Bray-Curtis, Jaccard | **Robust Aitchison Distance** & **JSD** |
-| **Ordination** | Basic PCoA / NMDS | **Robust PCA (RPCA / DEICODE-style biplot)** & corrected PCoA |
-| **Differential Abundance** | Single-tool (often high false discovery rate) | **Multi-Engine Consensus DA** (LinDA, CLR-linear, Wilcoxon + Cauchy test) |
-| **Visual Aesthetics** | Cluttered 50-color bars, no auto-pooling | **Intelligent top-N pooling**, colorblind-safe palettes, `theme_tidybiome` |
+| **Object System** | S4 (`phyloseq`, `TreeSummarizedExperiment`) | S3 `tidy_microbiome` inheriting from `tbl_df` (native `dplyr` pipelines) |
+| **Differential Abundance** | DESeq2 (`phyloseq`), ALDEx2/ANCOMBC (`mia`), None (`vegan`) | **CAFT (bioRxiv Dec 2025)**: Zero-cell compositional log-linear model; **Multi-Engine Consensus DA** (*ConsensusMetaDA* / *dar* 2024–2025) via Cauchy combination test and agreement scoring |
+| **Beta Diversity & Distances** | Bray-Curtis, Jaccard (`vegan`/`phyloseq`), standard Aitchison | **Tree-Wasserstein Distance**: Optimal transport Earth Mover's Distance across taxonomic hierarchy; **DTH Test for Homogeneity (bioRxiv 2025)**: Permutation test on Wasserstein distance distributions |
+| **Alpha Diversity** | Shannon, Simpson, Chao1 on raw/rarefied counts | **Simplex Compositional Diversity (bioRxiv 2026)**: Aitchison total variance on the closed simplex; Unified **Hill Numbers Profile ($q=0, 1, 2$)** on the effective species scale |
+| **Ordination & Projection** | PCoA, NMDS, CCA, RDA (`vegan`/`phyloseq`) | **Contrastive PCA (cPCA)**: Isolates condition-specific dysbiosis against background healthy noise; **Robust PCA (RPCA)**: SVD on zero-robust rCLR with simultaneous sample & taxon loading arrows |
+| **Core Microbiome** | Static cutoffs (e.g. 80% prev, 0.1% abund) | **Data-driven inflection curve analysis**: Discovers natural mathematical breakpoints in the prevalence landscape |
+| **Visual Aesthetics** | Cluttered 50-color bars, harsh borders | **Intelligent top-N pooling** into soft-gray `"Other"`, colorblind-safe palettes, `theme_tidybiome` |
 
 ---
 

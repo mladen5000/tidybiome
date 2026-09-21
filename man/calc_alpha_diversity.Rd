@@ -2,11 +2,12 @@
 % Please edit documentation in R/alpha_diversity.R
 \name{calc_alpha_diversity}
 \alias{calc_alpha_diversity}
-\title{Calculate Alpha Diversity Indices}
+\title{Calculate Alpha Diversity and Simplex Compositional Metrics}
 \usage{
 calc_alpha_diversity(
   tb,
-  metrics = c("hill", "shannon", "simpson", "inv_simpson", "observed", "chao1"),
+  metrics = c("hill", "simplex_variation", "shannon", "simpson", "inv_simpson",
+    "observed", "chao1"),
   assay = "counts"
 )
 }
@@ -17,7 +18,8 @@ calc_alpha_diversity(
 \itemize{
 \item \code{"hill"}: Calculates the Hill numbers profile: \code{hill_0} (species richness),
 \code{hill_1} (exponential of Shannon entropy), and \code{hill_2} (inverse Simpson index).
-All three share the identical intuitive unit: "effective number of species".
+\item \code{"simplex_variation"}: Compositional total variance on the closed simplex (bioRxiv 2026),
+measuring true geometric dispersion among taxon ratios.
 \item \code{"shannon"}: Shannon diversity index (\eqn{H = -\sum p_i \ln p_i}).
 \item \code{"simpson"}: Gini-Simpson index (\eqn{1 - \sum p_i^2}).
 \item \code{"inv_simpson"}: Inverse Simpson index (\eqn{1 / \sum p_i^2}).
@@ -33,13 +35,7 @@ An updated \code{tidy_microbiome} object with new alpha diversity columns added.
 }
 \description{
 Calculates alpha diversity indices including the unified Hill numbers profile
-(\eqn{q = 0, 1, 2}) and classic ecological indices (Shannon, Gini-Simpson, Inverse Simpson,
-Observed, Chao1, and Faith's PD). Calculated values are added directly as columns
-to the sample metadata of the \code{tidy_microbiome} object.
-}
-\examples{
-counts <- matrix(c(25, 25, 25, 25), nrow = 4, ncol = 1,
-                 dimnames = list(c("T1", "T2", "T3", "T4"), "S1"))
-tb <- tidy_microbiome(counts)
-tb <- calc_alpha_diversity(tb, metrics = "hill")
+(\eqn{q = 0, 1, 2}), simplex compositional variation (bioRxiv 2026),
+and classic ecological indices (Shannon, Gini-Simpson, Inverse Simpson,
+Observed, Chao1, and Faith's PD).
 }

@@ -12,23 +12,23 @@
 #'     sample coordinates and taxon loading vectors for clean biplots.
 #'   * `"pcoa"`: Principal Coordinates Analysis with automatic Lingoes correction for
 #'     negative eigenvalues.
+#'   * `"cpca"`: Contrastive PCA (cPCA). Isolates axes of microbial variation that are
+#'     enriched in a target condition (e.g. disease/treatment) relative to a background (control),
+#'     eliminating uninformative common background variability.
 #'   * `"pca"`: Standard Principal Component Analysis on centered abundance.
 #' @param metric Distance metric to use if `method = "pcoa"`. Defaults to `"raitchison"`.
+#' @param contrast_group Optional character string naming the binary metadata column if `method = "cpca"`.
+#' @param contrast_alpha Numeric contrast trade-off parameter for cPCA (default: 1.0).
 #' @param assay Character string naming the abundance assay to use. Defaults to `"counts"`.
 #' @param n_components Number of ordination axes to retain. Defaults to 3.
 #'
 #' @return An updated `tidy_microbiome` object with ordination results stored in its metadata.
 #' @export
-#'
-#' @examples
-#' counts <- matrix(c(100, 20, 5, 2, 5, 10, 80, 70, 1, 1, 50, 40), nrow = 3, byrow = TRUE,
-#'                  dimnames = list(c("T1", "T2", "T3"), c("S1", "S2", "S3", "S4")))
-#' tb <- tidy_microbiome(counts)
-#' tb <- calc_ordination(tb, method = "rpca")
-#' ord <- get_ordination(tb, "rpca")
 calc_ordination <- function(tb,
-                            method = c("rpca", "pcoa", "pca"),
+                            method = c("rpca", "pcoa", "cpca", "pca"),
                             metric = "raitchison",
+                            contrast_group = NULL,
+                            contrast_alpha = 1.0,
                             assay = "counts",
                             n_components = 3) {
   if (!inherits(tb, "tidy_microbiome")) {
@@ -51,6 +51,7 @@ calc_ordination <- function(tb,
     method,
     rpca = run_rpca(mat, sample_df, tax_df, n_components = n_components),
     pcoa = run_pcoa(tb, metric = metric, sample_df = sample_df, n_components = n_components),
+    cpca = run_cpca(mat, sample_df, tax_df, contrast_group = contrast_group, alpha = contrast_alpha, n_components = n_components),
     pca  = run_pca(mat, sample_df, tax_df, n_components = n_components)
   )
 
@@ -206,6 +207,63 @@ run_pca <- function(mat, sample_df, tax_df, n_components = 3) {
 
   taxa_loadings <- as.data.frame(pca_fit$rotation[, seq_len(k), drop = FALSE])
   taxa_loadings$taxon_id <- rownames(taxa_loadings)
+  taxa_merged <- if (!is.null(tax_df)) merge(taxa_loadings, tax_df, by = "taxon_id", sort = FALSE) else taxa_loadings
+
+  list(
+    samples = tibble::as_tibble(samples_merged),
+    taxa = tibble::as_tibble(taxa_merged),
+    variance_explained = var_exp
+  )
+}
+
+# Contrastive PCA (cPCA)
+run_cpca <- function(mat, sample_df, tax_df, contrast_group, alpha = 1.0, n_components = 3) {
+  if (is.null(contrast_group) || !contrast_group %in% colnames(sample_df)) {
+    stop("`contrast_group` must be specified in `calc_ordination(..., method = 'cpca')`.", call. = FALSE)
+  }
+  g_fac <- as.factor(sample_df[[contrast_group]])
+  lvls <- levels(g_fac)
+  if (length(lvls) != 2) {
+    stop("`contrast_group` must have exactly 2 levels (Background vs. Target).", call. = FALSE)
+  }
+
+  rclr_mat <- calc_rclr_matrix(mat)
+  X <- t(rclr_mat)
+
+  bg_idx <- which(g_fac == lvls[1])
+  target_idx <- which(g_fac == lvls[2])
+
+  X_bg <- X[bg_idx, , drop = FALSE]
+  X_target <- X[target_idx, , drop = FALSE]
+
+  C_bg <- stats::cov(X_bg)
+  C_target <- stats::cov(X_target)
+  C_bg[is.na(C_bg)] <- 0
+  C_target[is.na(C_target)] <- 0
+
+  C_contrast <- C_target - alpha * C_bg
+
+  eig <- eigen(C_contrast, symmetric = TRUE)
+  k <- min(n_components, ncol(X) - 1, nrow(X) - 1)
+  k <- max(1, k)
+
+  vecs <- eig$vectors[, seq_len(k), drop = FALSE]
+  vals <- pmax(0, eig$values[seq_len(k)])
+
+  var_exp <- if (sum(vals) > 0) vals / sum(vals) else rep(1 / k, k)
+  names(var_exp) <- paste0("cPC", seq_len(k))
+
+  X_centered <- scale(X, center = TRUE, scale = FALSE)
+  sample_coords <- X_centered %*% vecs
+  colnames(sample_coords) <- paste0("cPC", seq_len(k))
+
+  coords_df <- as.data.frame(sample_coords)
+  coords_df$sample_id <- rownames(X)
+  samples_merged <- merge(coords_df, sample_df, by = "sample_id", sort = FALSE)
+
+  taxa_loadings <- as.data.frame(vecs)
+  colnames(taxa_loadings) <- paste0("cPC", seq_len(k))
+  taxa_loadings$taxon_id <- colnames(X)
   taxa_merged <- if (!is.null(tax_df)) merge(taxa_loadings, tax_df, by = "taxon_id", sort = FALSE) else taxa_loadings
 
   list(

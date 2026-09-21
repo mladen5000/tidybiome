@@ -6,8 +6,10 @@
 \usage{
 calc_ordination(
   tb,
-  method = c("rpca", "pcoa", "pca"),
+  method = c("rpca", "pcoa", "cpca", "pca"),
   metric = "raitchison",
+  contrast_group = NULL,
+  contrast_alpha = 1,
   assay = "counts",
   n_components = 3
 )
@@ -21,10 +23,17 @@ calc_ordination(
 sample coordinates and taxon loading vectors for clean biplots.
 \item \code{"pcoa"}: Principal Coordinates Analysis with automatic Lingoes correction for
 negative eigenvalues.
+\item \code{"cpca"}: Contrastive PCA (cPCA). Isolates axes of microbial variation that are
+enriched in a target condition (e.g. disease/treatment) relative to a background (control),
+eliminating uninformative common background variability.
 \item \code{"pca"}: Standard Principal Component Analysis on centered abundance.
 }}
 
 \item{metric}{Distance metric to use if \code{method = "pcoa"}. Defaults to \code{"raitchison"}.}
+
+\item{contrast_group}{Optional character string naming the binary metadata column if \code{method = "cpca"}.}
+
+\item{contrast_alpha}{Numeric contrast trade-off parameter for cPCA (default: 1.0).}
 
 \item{assay}{Character string naming the abundance assay to use. Defaults to \code{"counts"}.}
 
@@ -38,11 +47,4 @@ Performs ordination on microbiome data, including modern compositional Robust PC
 (RPCA, generating feature loadings for true compositional biplots without distortion)
 and classical Principal Coordinates Analysis (PCoA with negative eigenvalue correction)
 or standard PCA.
-}
-\examples{
-counts <- matrix(c(100, 20, 5, 2, 5, 10, 80, 70, 1, 1, 50, 40), nrow = 3, byrow = TRUE,
-                 dimnames = list(c("T1", "T2", "T3"), c("S1", "S2", "S3", "S4")))
-tb <- tidy_microbiome(counts)
-tb <- calc_ordination(tb, method = "rpca")
-ord <- get_ordination(tb, "rpca")
 }

@@ -23,3 +23,21 @@ test_that("Chao1 handles singletons properly", {
   # Chao1 = 5 + (2 * 1) / (2 * 2) = 5.5
   expect_equal(tb_alpha$chao1, 5.5)
 })
+
+test_that("Simplex compositional variation calculates Aitchison total variance", {
+  # Equal proportions -> variance of log proportions is 0
+  counts <- matrix(c(10, 10, 10, 10), nrow = 4, ncol = 1,
+                   dimnames = list(paste0("T", 1:4), "S1"))
+  tb <- tidy_microbiome(counts)
+  tb_alpha <- calc_alpha_diversity(tb, metrics = "simplex_variation")
+
+  expect_true("simplex_variation" %in% colnames(tb_alpha))
+  expect_equal(tb_alpha$simplex_variation, 0)
+
+  # Unequal proportions
+  counts2 <- matrix(c(100, 10, 1), nrow = 3, ncol = 1,
+                    dimnames = list(paste0("T", 1:3), "S1"))
+  tb2 <- tidy_microbiome(counts2)
+  tb_alpha2 <- calc_alpha_diversity(tb2, metrics = "simplex_variation")
+  expect_true(tb_alpha2$simplex_variation > 0)
+})

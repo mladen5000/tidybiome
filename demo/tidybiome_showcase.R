@@ -27,33 +27,44 @@ cat("Robust CLR assay added without zero-distortion or pseudocount artifacts.\n"
 
 # 4. Alpha Diversity (Unified Hill Numbers Profile)
 message("\n--- Step 4: Alpha Diversity (Hill Profile q=0, 1, 2) ---")
-gut_clean <- calc_alpha_diversity(gut_clean, metrics = c("hill", "shannon", "chao1"))
-cat("Hill numbers calculated:\n")
-print(gut_clean |> select(sample_id, treatment, hill_0, hill_1, hill_2, shannon) |> head(4))
+gut_clean <- calc_alpha_diversity(gut_clean, metrics = c("hill", "simplex_variation", "shannon"))
+cat("Hill numbers and Simplex Compositional Variation (bioRxiv 2026):\n")
+print(gut_clean |> select(sample_id, treatment, hill_0, hill_1, hill_2, simplex_variation) |> head(4))
 
-# 5. Beta Diversity (Robust Aitchison Distance)
-message("\n--- Step 5: Beta Diversity (Robust Aitchison) ---")
+# 5. Beta Diversity (Robust Aitchison & Optimal Transport Tree-Wasserstein)
+message("\n--- Step 5: Beta Diversity (Tree-Wasserstein & Robust Aitchison) ---")
 gut_clean <- calc_beta_diversity(gut_clean, metric = "raitchison")
-d_mat <- get_distance(gut_clean, "raitchison")
-cat(sprintf("Calculated %dx%d Robust Aitchison distance matrix.\n", attr(d_mat, "Size"), attr(d_mat, "Size")))
+gut_clean <- calc_beta_diversity(gut_clean, metric = "wasserstein")
+d_w <- get_distance(gut_clean, "wasserstein")
+cat(sprintf("Calculated Optimal Transport Tree-Wasserstein Distance (dim %dx%d).\n",
+            attr(d_w, "Size"), attr(d_w, "Size")))
 
-# 6. Dimensionality Reduction (RPCA Biplot)
-message("\n--- Step 6: Dimensionality Reduction (RPCA Biplot) ---")
+# 5b. Distance-based Test for Homogeneity (DTH, bioRxiv 2025)
+message("\n--- Step 5b: Distance-based Test for Homogeneity (DTH, bioRxiv 2025) ---")
+dth_res <- dth_test(gut_clean, group = "treatment", metric = "wasserstein", n_perm = 199)
+print(dth_res)
+
+# 6. Dimensionality Reduction (RPCA Biplot & Contrastive PCA)
+message("\n--- Step 6: Dimensionality Reduction (RPCA Biplot & Contrastive PCA) ---")
 gut_clean <- calc_ordination(gut_clean, method = "rpca")
+gut_clean <- calc_ordination(gut_clean, method = "cpca", contrast_group = "treatment")
 ord <- get_ordination(gut_clean, "rpca")
+ord_cpca <- get_ordination(gut_clean, "cpca")
 cat(sprintf("RPCA Variance Explained: PC1 = %.1f%%, PC2 = %.1f%%\n",
             ord$variance_explained[1] * 100, ord$variance_explained[2] * 100))
+cat(sprintf("Contrastive PCA (cPCA): isolated %d contrastive axes of treatment variance.\n",
+            ncol(ord_cpca$samples) - ncol(gut_clean)))
 
-# 7. SOTA Multi-Engine Consensus Differential Abundance
-message("\n--- Step 7: Multi-Engine Consensus Differential Abundance ---")
+# 7. SOTA Multi-Engine Consensus Differential Abundance with CAFT
+message("\n--- Step 7: Consensus Differential Abundance (CAFT, LinDA, CLR, Wilcoxon) ---")
 da_results <- calc_differential_abundance(
   gut_clean,
   group = "treatment",
-  methods = c("consensus", "linda", "clr_linear", "wilcoxon"),
+  methods = c("consensus", "caft", "linda", "clr_linear", "wilcoxon"),
   fdr_cutoff = 0.05
 )
 
-cat("Top Significant Biomarkers (Consensus):\n")
+cat("Top Significant Biomarkers (Consensus with CAFT zero-cell engine):\n")
 print(da_results |>
         filter(is_significant) |>
         select(taxon_id, Phylum, Genus, log2fc, padj_consensus, agreement_score) |>

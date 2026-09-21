@@ -29,3 +29,19 @@ test_that("PCoA with negative eigenvalue correction runs smoothly", {
   expect_equal(nrow(ord$samples), 3)
   expect_true("PCoA1" %in% colnames(ord$samples))
 })
+
+test_that("Contrastive PCA (cPCA) extracts phenotype-specific axes", {
+  counts <- matrix(c(100, 110, 5, 2,
+                     5, 10, 80, 70,
+                     1, 1, 50, 40), nrow = 3, byrow = TRUE,
+                   dimnames = list(c("Tax1", "Tax2", "Tax3"), c("S1", "S2", "S3", "S4")))
+  sample_data <- data.frame(sample_id = c("S1", "S2", "S3", "S4"), group = c("Control", "Control", "Treated", "Treated"))
+  tb <- tidy_microbiome(counts, sample_data)
+
+  tb_cpca <- calc_ordination(tb, method = "cpca", contrast_group = "group", contrast_alpha = 1.0)
+  ord <- get_ordination(tb_cpca, "cpca")
+
+  expect_true(all(c("samples", "taxa", "variance_explained") %in% names(ord)))
+  expect_true("cPC1" %in% colnames(ord$samples))
+  expect_equal(nrow(ord$samples), 4)
+})

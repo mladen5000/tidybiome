@@ -12,6 +12,8 @@
 #' @param group Character string naming the binary grouping variable in sample metadata (e.g. `"treatment"`).
 #' @param methods Character vector of engines to run. Options:
 #'   * `"consensus"`: Runs all available engines and aggregates them into a consensus verdict.
+#'   * `"caft"`: Compositional Log-Linear Model with Zero Cells (bioRxiv Dec 2025),
+#'     jointly modeling presence/absence probability and conditional log-abundance.
 #'   * `"linda"`: Linear Models for Differential Abundance with compositional bias correction.
 #'   * `"clr_linear"`: Linear regression on centered log-ratio abundances.
 #'   * `"wilcoxon"`: Non-parametric two-sample Wilcoxon rank-sum test.
@@ -28,16 +30,9 @@
 #'   * `is_significant`: Logical flag whether taxon meets `fdr_cutoff`.
 #'   * Per-method statistics and taxonomic annotations.
 #' @export
-#'
-#' @examples
-#' counts <- matrix(c(100, 120, 110, 5, 8, 6, 50, 45, 55, 48, 52, 50), nrow = 2, byrow = TRUE,
-#'                  dimnames = list(c("DiffTaxon", "NullTaxon"), paste0("S", 1:6)))
-#' sample_data <- data.frame(sample_id = paste0("S", 1:6), group = c("A", "A", "A", "B", "B", "B"))
-#' tb <- tidy_microbiome(counts, sample_data)
-#' res <- calc_differential_abundance(tb, group = "group")
 calc_differential_abundance <- function(tb,
                                         group,
-                                        methods = c("consensus", "linda", "clr_linear", "wilcoxon"),
+                                        methods = c("consensus", "caft", "linda", "clr_linear", "wilcoxon"),
                                         fdr_cutoff = 0.05,
                                         assay = "counts",
                                         pseudocount = 0.5) {
@@ -68,6 +63,7 @@ calc_differential_abundance <- function(tb,
 
   # Check which engines to execute
   run_all <- "consensus" %in% methods
+  do_caft  <- run_all || "caft" %in% methods
   do_linda <- run_all || "linda" %in% methods
   do_clr   <- run_all || "clr_linear" %in% methods
   do_wilc  <- run_all || "wilcoxon" %in% methods
@@ -76,7 +72,17 @@ calc_differential_abundance <- function(tb,
   p_matrix <- matrix(NA, nrow = n_taxa, ncol = 0)
   log2fc_matrix <- matrix(NA, nrow = n_taxa, ncol = 0)
 
-  # 1. LinDA Engine
+  # 1. CAFT Engine (bioRxiv Dec 2025: Compositional Zero-Cell Model)
+  if (do_caft) {
+    caft_res <- run_caft_engine(counts, group_vec)
+    results_df$log2fc_caft <- caft_res$log2fc
+    results_df$p_caft <- caft_res$pvalue
+    results_df$padj_caft <- stats::p.adjust(caft_res$pvalue, method = "BH")
+    p_matrix <- cbind(p_matrix, caft = caft_res$pvalue)
+    log2fc_matrix <- cbind(log2fc_matrix, caft = caft_res$log2fc)
+  }
+
+  # 2. LinDA Engine
   if (do_linda) {
     linda_res <- run_linda_engine(counts, group_vec, pseudocount = pseudocount)
     results_df$log2fc_linda <- linda_res$log2fc
@@ -86,7 +92,7 @@ calc_differential_abundance <- function(tb,
     log2fc_matrix <- cbind(log2fc_matrix, linda = linda_res$log2fc)
   }
 
-  # 2. CLR Linear Engine
+  # 3. CLR Linear Engine
   if (do_clr) {
     clr_res <- run_clr_linear_engine(counts, group_vec, pseudocount = pseudocount)
     results_df$log2fc_clr <- clr_res$log2fc
@@ -96,7 +102,7 @@ calc_differential_abundance <- function(tb,
     log2fc_matrix <- cbind(log2fc_matrix, clr = clr_res$log2fc)
   }
 
-  # 3. Wilcoxon Engine
+  # 4. Wilcoxon Engine
   if (do_wilc) {
     wilc_res <- run_wilcoxon_engine(counts, group_vec)
     results_df$log2fc_wilcoxon <- wilc_res$log2fc
@@ -232,5 +238,67 @@ run_wilcoxon_engine <- function(counts, group_vec) {
     test <- tryCatch(stats::wilcox.test(v2, v1, exact = FALSE), error = function(e) NULL)
     pvals[i] <- if (!is.null(test)) test$p.value else 1
   }
+  list(log2fc = log2fc, pvalue = pvals)
+}
+
+# CAFT: Compositional Log-Linear Model for Zero Cells (bioRxiv Dec 2025)
+run_caft_engine <- function(counts, group_vec) {
+  rel_mat <- calc_relabundance_matrix(counts)
+  g_numeric <- as.numeric(group_vec) - 1
+  n_taxa <- nrow(counts)
+  log2fc <- numeric(n_taxa)
+  pvals  <- numeric(n_taxa)
+
+  for (i in seq_len(n_taxa)) {
+    y <- rel_mat[i, ]
+    z <- as.numeric(y > 0)
+
+    # 1. Occurrence / Zero part (Logistic regression via Likelihood Ratio Test)
+    w_zero <- 0
+    if (length(unique(z)) == 2) {
+      fit_null <- tryCatch(stats::glm(z ~ 1, family = stats::binomial()), error = function(e) NULL)
+      fit_full <- tryCatch(stats::glm(z ~ g_numeric, family = stats::binomial()), error = function(e) NULL)
+      if (!is.null(fit_null) && !is.null(fit_full)) {
+        lrt_val <- as.numeric(2 * (stats::logLik(fit_full) - stats::logLik(fit_null)))
+        w_zero <- max(0, lrt_val)
+      }
+    }
+
+    # 2. Positive abundance part (conditional log linear model)
+    pos_idx <- which(z == 1)
+    w_abund <- 0
+    lfc_est <- 0
+    if (length(pos_idx) >= 4 && length(unique(g_numeric[pos_idx])) == 2) {
+      fit_abund <- tryCatch(
+        stats::lm(log(y[pos_idx]) ~ g_numeric[pos_idx]),
+        error = function(e) NULL
+      )
+      if (!is.null(fit_abund)) {
+        c_abund <- summary(fit_abund)$coefficients
+        if (nrow(c_abund) >= 2 && !is.na(c_abund[2, 2]) && c_abund[2, 2] > 0) {
+          w_abund <- (c_abund[2, 1] / c_abund[2, 2])^2
+          lfc_est <- c_abund[2, 1] / log(2)
+        }
+      }
+    }
+
+    if (lfc_est == 0) {
+      m0 <- mean(y[g_numeric == 0], na.rm = TRUE)
+      m1 <- mean(y[g_numeric == 1], na.rm = TRUE)
+      lfc_est <- log2((m1 + 1e-6) / (m0 + 1e-6))
+    }
+    log2fc[i] <- lfc_est
+
+    # Two-part omnibus test statistic
+    s_stat <- w_zero + w_abund
+    df_test <- (w_zero > 0) + (w_abund > 0)
+    if (df_test > 0) {
+      pvals[i] <- stats::pchisq(s_stat, df = df_test, lower.tail = FALSE)
+    } else {
+      wt <- tryCatch(stats::wilcox.test(y ~ g_numeric, exact = FALSE), error = function(e) NULL)
+      pvals[i] <- if (!is.null(wt)) wt$p.value else 1
+    }
+  }
+
   list(log2fc = log2fc, pvalue = pvals)
 }

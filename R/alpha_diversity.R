@@ -1,16 +1,17 @@
-#' Calculate Alpha Diversity Indices
+#' Calculate Alpha Diversity and Simplex Compositional Metrics
 #'
 #' @description
 #' Calculates alpha diversity indices including the unified Hill numbers profile
-#' (\eqn{q = 0, 1, 2}) and classic ecological indices (Shannon, Gini-Simpson, Inverse Simpson,
-#' Observed, Chao1, and Faith's PD). Calculated values are added directly as columns
-#' to the sample metadata of the `tidy_microbiome` object.
+#' (\eqn{q = 0, 1, 2}), simplex compositional variation (bioRxiv 2026),
+#' and classic ecological indices (Shannon, Gini-Simpson, Inverse Simpson,
+#' Observed, Chao1, and Faith's PD).
 #'
 #' @param tb A `tidy_microbiome` object.
 #' @param metrics Character vector of metrics to calculate. Supported options:
 #'   * `"hill"`: Calculates the Hill numbers profile: `hill_0` (species richness),
 #'     `hill_1` (exponential of Shannon entropy), and `hill_2` (inverse Simpson index).
-#'     All three share the identical intuitive unit: "effective number of species".
+#'   * `"simplex_variation"`: Compositional total variance on the closed simplex (bioRxiv 2026),
+#'     measuring true geometric dispersion among taxon ratios.
 #'   * `"shannon"`: Shannon diversity index (\eqn{H = -\sum p_i \ln p_i}).
 #'   * `"simpson"`: Gini-Simpson index (\eqn{1 - \sum p_i^2}).
 #'   * `"inv_simpson"`: Inverse Simpson index (\eqn{1 / \sum p_i^2}).
@@ -21,14 +22,8 @@
 #'
 #' @return An updated `tidy_microbiome` object with new alpha diversity columns added.
 #' @export
-#'
-#' @examples
-#' counts <- matrix(c(25, 25, 25, 25), nrow = 4, ncol = 1,
-#'                  dimnames = list(c("T1", "T2", "T3", "T4"), "S1"))
-#' tb <- tidy_microbiome(counts)
-#' tb <- calc_alpha_diversity(tb, metrics = "hill")
 calc_alpha_diversity <- function(tb,
-                                 metrics = c("hill", "shannon", "simpson", "inv_simpson", "observed", "chao1"),
+                                 metrics = c("hill", "simplex_variation", "shannon", "simpson", "inv_simpson", "observed", "chao1"),
                                  assay = "counts") {
   if (!inherits(tb, "tidy_microbiome")) {
     stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
@@ -70,10 +65,19 @@ calc_alpha_diversity <- function(tb,
       s_obs + (f1 * (f1 - 1)) / 2
     }
 
+    # Simplex compositional variation (Aitchison total variance, bioRxiv 2026)
+    simplex_var <- if (s_obs >= 2) {
+      log_p <- log(pos_vals)
+      stats::var(log_p) * ((s_obs - 1) / s_obs)
+    } else {
+      0
+    }
+
     list(
       hill_0 = s_obs,
       hill_1 = exp(h),
       hill_2 = if (d > 0) 1 / d else 0,
+      simplex_variation = simplex_var,
       shannon = h,
       simpson = 1 - d,
       inv_simpson = if (d > 0) 1 / d else 0,

@@ -6,7 +6,7 @@
 \usage{
 calc_beta_diversity(
   tb,
-  metric = c("raitchison", "aitchison", "bray", "jaccard", "jsd"),
+  metric = c("raitchison", "wasserstein", "aitchison", "bray", "jaccard", "jsd"),
   assay = "counts",
   pseudocount = 1
 )
@@ -18,6 +18,8 @@ calc_beta_diversity(
 \itemize{
 \item \code{"raitchison"}: Robust Aitchison distance (Euclidean distance on the \code{rclr} matrix).
 Recommended for zero-inflated microbiome data as it avoids pseudocount distortion.
+\item \code{"wasserstein"}: Optimal Transport Tree-Wasserstein / Earth Mover's Distance across
+taxonomic hierarchy. Measures physical work needed to move microbial mass across lineages.
 \item \code{"aitchison"}: Classic Aitchison distance (Euclidean distance on pseudocount CLR).
 \item \code{"bray"}: Bray-Curtis dissimilarity.
 \item \code{"jaccard"}: Jaccard binary dissimilarity.

@@ -7,7 +7,7 @@
 calc_differential_abundance(
   tb,
   group,
-  methods = c("consensus", "linda", "clr_linear", "wilcoxon"),
+  methods = c("consensus", "caft", "linda", "clr_linear", "wilcoxon"),
   fdr_cutoff = 0.05,
   assay = "counts",
   pseudocount = 0.5
@@ -21,6 +21,8 @@ calc_differential_abundance(
 \item{methods}{Character vector of engines to run. Options:
 \itemize{
 \item \code{"consensus"}: Runs all available engines and aggregates them into a consensus verdict.
+\item \code{"caft"}: Compositional Log-Linear Model with Zero Cells (bioRxiv Dec 2025),
+jointly modeling presence/absence probability and conditional log-abundance.
 \item \code{"linda"}: Linear Models for Differential Abundance with compositional bias correction.
 \item \code{"clr_linear"}: Linear regression on centered log-ratio abundances.
 \item \code{"wilcoxon"}: Non-parametric two-sample Wilcoxon rank-sum test.
@@ -51,11 +53,4 @@ individual differential abundance methods frequently produce contradictory resul
 \code{tidybiome} runs multiple complementary engines (LinDA compositional regression,
 CLR linear models, and non-parametric Wilcoxon tests) and computes consensus
 p-values (via the Cauchy combination test), agreement scores, and effect sizes.
-}
-\examples{
-counts <- matrix(c(100, 120, 110, 5, 8, 6, 50, 45, 55, 48, 52, 50), nrow = 2, byrow = TRUE,
-                 dimnames = list(c("DiffTaxon", "NullTaxon"), paste0("S", 1:6)))
-sample_data <- data.frame(sample_id = paste0("S", 1:6), group = c("A", "A", "A", "B", "B", "B"))
-tb <- tidy_microbiome(counts, sample_data)
-res <- calc_differential_abundance(tb, group = "group")
 }

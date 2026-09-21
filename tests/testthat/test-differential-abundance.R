@@ -17,3 +17,20 @@ test_that("calc_differential_abundance runs consensus engines and flags biomarke
   expect_true(diff_row$agreement_score >= 2)
   expect_true(diff_row$padj_consensus < 0.05)
 })
+
+test_that("CAFT engine models zero cells and differential abundance", {
+  # Taxon 1 has zero cells in group B, high counts in group A
+  counts <- matrix(c(100, 80, 90, 0, 0, 0,
+                     20, 25, 22, 21, 24, 20), nrow = 2, byrow = TRUE,
+                   dimnames = list(c("ZeroTaxon", "NullTaxon"), paste0("S", 1:6)))
+  sample_data <- data.frame(sample_id = paste0("S", 1:6), group = c("A", "A", "A", "B", "B", "B"))
+  tb <- tidy_microbiome(counts, sample_data)
+
+  da_caft <- calc_differential_abundance(tb, group = "group", methods = "caft")
+  expect_s3_class(da_caft, "tbl_df")
+  expect_true(all(c("log2fc_caft", "p_caft", "padj_caft") %in% colnames(da_caft)))
+
+  # ZeroTaxon should have significant p_caft
+  z_row <- da_caft[da_caft$taxon_id == "ZeroTaxon", ]
+  expect_true(z_row$p_caft < 0.05)
+})

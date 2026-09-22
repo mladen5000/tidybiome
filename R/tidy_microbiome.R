@@ -191,6 +191,150 @@ select.tidy_microbiome <- function(.data, ...) {
 }
 
 #' @export
+`[.tidy_microbiome` <- function(x, i, j, drop = FALSE) {
+  is_single_arg <- nargs() <= 2
+  res <- NextMethod()
+  
+  if (!is.data.frame(res)) {
+    return(res)
+  }
+  
+  if (is_single_arg) {
+    if ("sample_id" %in% colnames(res)) {
+      return(reconstruct_tidy_microbiome(tibble::as_tibble(res), x, sync_samples = FALSE))
+    } else {
+      return(res)
+    }
+  }
+  
+  if (!missing(j)) {
+    if (!"sample_id" %in% colnames(res)) {
+      orig_sample_id <- x$sample_id
+      if (!missing(i)) orig_sample_id <- orig_sample_id[i]
+      res$sample_id <- orig_sample_id
+      res <- res[, c("sample_id", setdiff(colnames(res), "sample_id")), drop = FALSE]
+    }
+  }
+  
+  sync_samples <- !missing(i)
+  reconstruct_tidy_microbiome(tibble::as_tibble(res), x, sync_samples = sync_samples)
+}
+
+#' @export
+`[<-.tidy_microbiome` <- function(x, i, j, value) {
+  res <- NextMethod()
+  reconstruct_tidy_microbiome(tibble::as_tibble(res), x, sync_samples = FALSE)
+}
+
+#' Filter Taxa Based on Taxonomy Table Attributes
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @param ... Logical predicates passed to [dplyr::filter] on the taxonomy table.
+#'
+#' @return A filtered `tidy_microbiome` object with synchronized assays, taxonomy, and tree.
+#' @export
+filter_taxa <- function(tb, ...) {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  
+  tax_df <- attr(tb, "tax_table")
+  if (is.null(tax_df) || nrow(tax_df) == 0) {
+    stop("No taxonomy table found in `tb`.", call. = FALSE)
+  }
+  
+  filtered_tax <- dplyr::filter(tax_df, ...)
+  keep_taxa <- as.character(filtered_tax$taxon_id)
+  
+  if (length(keep_taxa) == 0) {
+    stop("No taxa match the specified filter conditions.", call. = FALSE)
+  }
+  
+  assays <- attr(tb, "assays")
+  new_assays <- lapply(assays, function(mat) {
+    mat[keep_taxa, , drop = FALSE]
+  })
+  
+  tree <- attr(tb, "phy_tree")
+  new_tree <- NULL
+  if (!is.null(tree) && requireNamespace("ape", quietly = TRUE)) {
+    common_tips <- intersect(tree$tip.label, keep_taxa)
+    if (length(common_tips) > 1) {
+      new_tree <- ape::keep.tip(tree, common_tips)
+    } else if (length(common_tips) == 1) {
+      new_tree <- tree
+      new_tree$tip.label <- common_tips
+      new_tree$edge <- matrix(c(2L, 1L), 1, 2)
+      new_tree$edge.length <- 1
+      new_tree$Nnode <- 1L
+      class(new_tree) <- "phylo"
+    }
+  }
+  
+  out <- tb
+  attr(out, "assays")    <- new_assays
+  attr(out, "tax_table") <- filtered_tax
+  attr(out, "phy_tree")  <- new_tree
+  out
+}
+
+#' Validate Integrity of a tidy_microbiome Object
+#'
+#' @param tb An object to validate.
+#' @return `TRUE` if valid, otherwise throws an error.
+#' @export
+validate_tidy_microbiome <- function(tb) {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("Object must inherit from 'tidy_microbiome'.", call. = FALSE)
+  }
+  if (!"sample_id" %in% colnames(tb)) {
+    stop("Sample metadata must contain a 'sample_id' column.", call. = FALSE)
+  }
+  
+  sample_ids <- as.character(tb$sample_id)
+  if (anyDuplicated(sample_ids)) {
+    stop("Duplicate 'sample_id' values found in sample metadata.", call. = FALSE)
+  }
+  
+  assays <- attr(tb, "assays")
+  if (!is.list(assays) || length(assays) == 0) {
+    stop("`tb` must contain an 'assays' list attribute with at least one assay.", call. = FALSE)
+  }
+  
+  for (nm in names(assays)) {
+    mat <- assays[[nm]]
+    if (!is.matrix(mat)) {
+      stop(sprintf("Assay '%s' must be a matrix.", nm), call. = FALSE)
+    }
+    if (ncol(mat) != length(sample_ids) || !identical(colnames(mat), sample_ids)) {
+      stop(sprintf("Sample names in assay '%s' do not match metadata 'sample_id's.", nm), call. = FALSE)
+    }
+  }
+  
+  tax_df <- attr(tb, "tax_table")
+  if (!is.null(tax_df)) {
+    if (!"taxon_id" %in% colnames(tax_df)) {
+      stop("`tax_table` must contain a 'taxon_id' column.", call. = FALSE)
+    }
+    taxon_ids <- as.character(tax_df$taxon_id)
+    first_mat <- assays[[1]]
+    if (nrow(first_mat) != length(taxon_ids) || !identical(rownames(first_mat), taxon_ids)) {
+      stop("Taxon names in assay do not match 'taxon_id' in tax_table.", call. = FALSE)
+    }
+  }
+  
+  tree <- attr(tb, "phy_tree")
+  if (!is.null(tree)) {
+    if (!inherits(tree, "phylo")) {
+      stop("`phy_tree` attribute must be of class 'phylo'.", call. = FALSE)
+    }
+  }
+  
+  TRUE
+}
+
+
+#' @export
 print.tidy_microbiome <- function(x, ...) {
   n_samp <- nrow(x)
   assays <- attr(x, "assays")

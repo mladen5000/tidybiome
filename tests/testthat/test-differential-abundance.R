@@ -34,3 +34,44 @@ test_that("CAFT engine models zero cells and differential abundance", {
   z_row <- da_caft[da_caft$taxon_id == "ZeroTaxon", ]
   expect_true(z_row$p_caft < 0.05)
 })
+
+test_that("calc_differential_abundance adjusts for covariates using formula", {
+  set.seed(42)
+  counts <- matrix(rpois(100, lambda = 50), nrow = 10, ncol = 10,
+                   dimnames = list(paste0("ASV", 1:10), paste0("S", 1:10)))
+  # Inject true signal for ASV1
+  counts["ASV1", 1:5] <- counts["ASV1", 1:5] * 5
+  
+  sample_data <- data.frame(
+    sample_id = paste0("S", 1:10),
+    treatment = rep(c("A", "B"), each = 5),
+    age = rnorm(10, mean = 40, sd = 5)
+  )
+  tb <- tidy_microbiome(counts, sample_data = sample_data)
+  res <- calc_differential_abundance(tb, formula = ~ treatment + age, contrast = "treatment")
+  expect_s3_class(res, "tbl_df")
+  expect_true(all(c("taxon_id", "log2fc", "p_consensus", "padj_consensus") %in% colnames(res)))
+  expect_equal(res$taxon_id[1], "ASV1")
+  expect_true(res$padj_consensus[1] < 0.05)
+})
+
+test_that("calc_differential_abundance supports continuous target variable", {
+  set.seed(42)
+  counts <- matrix(rpois(100, lambda = 50), nrow = 10, ncol = 10,
+                   dimnames = list(paste0("ASV", 1:10), paste0("S", 1:10)))
+  # ASV2 strongly correlates with bmi
+  bmi_vals <- seq(20, 35, length.out = 10)
+  counts["ASV2", ] <- as.integer(bmi_vals * 8)
+  
+  sample_data <- data.frame(
+    sample_id = paste0("S", 1:10),
+    bmi = bmi_vals,
+    sex = rep(c("M", "F"), 5)
+  )
+  tb <- tidy_microbiome(counts, sample_data = sample_data)
+  res <- calc_differential_abundance(tb, formula = ~ bmi + sex, contrast = "bmi")
+  expect_s3_class(res, "tbl_df")
+  expect_true("log2fc" %in% colnames(res))
+  expect_true(res$padj_consensus[res$taxon_id == "ASV2"] < 0.05)
+})
+

@@ -31,7 +31,8 @@ Suggests:
     ape (>= 5.0),
     phyloseq,
     TreeSummarizedExperiment,
-    SummarizedExperiment
+    SummarizedExperiment,
+    S7
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.1.0

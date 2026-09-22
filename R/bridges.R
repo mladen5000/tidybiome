@@ -19,6 +19,9 @@ as_tidybiome.default <- function(x, sample_data = NULL, tax_table = NULL, phy_tr
   if (inherits(x, "TreeSummarizedExperiment") || inherits(x, "SummarizedExperiment")) {
     return(from_tse(x))
   }
+  if (inherits(x, "tidybiome::tidy_microbiome_s7") || inherits(x, "tidy_microbiome_s7")) {
+    return(from_s7(x))
+  }
   if (is.matrix(x) || is.data.frame(x)) {
     return(tidy_microbiome(as.matrix(x), sample_data = sample_data, tax_table = tax_table, phy_tree = phy_tree, ...))
   }
@@ -267,5 +270,115 @@ set_tree <- function(tb, tree, prune = TRUE) {
   attr(tb, "phy_tree") <- tree
   tb
 }
+
+# Internal helper to construct or retrieve the S7 class
+get_s7_tidy_microbiome_class <- function() {
+  if (!requireNamespace("S7", quietly = TRUE)) {
+    return(NULL)
+  }
+  S7::new_class(
+    "tidy_microbiome_s7",
+    package = "tidybiome",
+    properties = list(
+      metadata = S7::class_data.frame,
+      assays = S7::class_list,
+      taxonomy = S7::new_property(S7::class_any, default = NULL),
+      phy_tree = S7::new_property(S7::class_any, default = NULL)
+    ),
+    validator = function(self) {
+      meta <- S7::prop(self, "metadata")
+      assays <- S7::prop(self, "assays")
+      if (!"sample_id" %in% colnames(meta)) {
+        return("metadata must contain a `sample_id` column.")
+      }
+      if (!"counts" %in% names(assays)) {
+        return("assays must contain a `counts` matrix.")
+      }
+      counts <- assays$counts
+      if (!is.matrix(counts)) {
+        return("`counts` assay must be a matrix.")
+      }
+      if (ncol(counts) != nrow(meta)) {
+        return("Number of columns in `counts` assay must match number of rows in `metadata`.")
+      }
+      NULL
+    }
+  )
+}
+
+#' Convert tidy_microbiome to S7 Formal Object
+#'
+#' Coerces an S3 `tidy_microbiome` object to a next-generation S7 formal object
+#' with typed properties and validation contracts.
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @return A `tidybiome::tidy_microbiome_s7` object.
+#' @export
+#' @examples
+#' if (requireNamespace("S7", quietly = TRUE)) {
+#'   data(gut_microbiome)
+#'   tb_s7 <- to_s7(gut_microbiome)
+#'   print(tb_s7)
+#' }
+to_s7 <- function(tb) {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  if (!requireNamespace("S7", quietly = TRUE)) {
+    stop("Package 'S7' is required for `to_s7()`. Please install it.", call. = FALSE)
+  }
+
+  cls <- get_s7_tidy_microbiome_class()
+  cls(
+    metadata = as.data.frame(tibble::as_tibble(tb)),
+    assays = attr(tb, "assays"),
+    taxonomy = attr(tb, "tax_table"),
+    phy_tree = attr(tb, "phy_tree")
+  )
+}
+
+#' Convert S7 Formal Object to tidy_microbiome S3 Tibble
+#'
+#' Coerces an S7 `tidy_microbiome_s7` object back into a standard S3 `tidy_microbiome` tibble.
+#'
+#' @param s7_obj An object created by [to_s7()].
+#' @return A `tidy_microbiome` S3 object.
+#' @export
+#' @examples
+#' if (requireNamespace("S7", quietly = TRUE)) {
+#'   data(gut_microbiome)
+#'   tb_s7 <- to_s7(gut_microbiome)
+#'   tb_restored <- from_s7(tb_s7)
+#'   class(tb_restored)
+#' }
+from_s7 <- function(s7_obj) {
+  if (!inherits(s7_obj, "tidybiome::tidy_microbiome_s7") && !inherits(s7_obj, "tidy_microbiome_s7")) {
+    stop("`s7_obj` must be an S7 `tidy_microbiome_s7` object.", call. = FALSE)
+  }
+  if (!requireNamespace("S7", quietly = TRUE)) {
+    stop("Package 'S7' is required for `from_s7()`. Please install it.", call. = FALSE)
+  }
+
+  meta <- S7::prop(s7_obj, "metadata")
+  assays <- S7::prop(s7_obj, "assays")
+  tax <- S7::prop(s7_obj, "taxonomy")
+  tree <- S7::prop(s7_obj, "phy_tree")
+
+  counts <- assays$counts
+  tb <- tidy_microbiome(
+    counts = counts,
+    sample_data = meta,
+    tax_table = tax,
+    phy_tree = tree
+  )
+
+  # Transfer other assays if present
+  other_assays <- setdiff(names(assays), "counts")
+  for (oa in other_assays) {
+    attr(tb, "assays")[[oa]] <- assays[[oa]]
+  }
+  tb
+}
+
 
 

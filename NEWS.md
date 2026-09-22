@@ -48,8 +48,15 @@ Initial production release of **`tidybiome`**, a modern, tidyverse-native Swiss 
 * `report_tidybiome()`: Zero-dependency standalone HTML quality control dashboard summarizing cohort dimensions, sequencing depth distributions, zero sparsity, top taxa, and metadata dictionaries.
 * Minimalist publication theme: `theme_tidybiome()`.
 
+### Sample Quality Control & Diagnostic Suite
+* `calc_qc_metrics(tb, augment = TRUE)`: Calculates per-sample library depth (`qc_total_reads`), observed richness (`qc_n_features`), sample-level sparsity (`qc_sparsity`), dominance of the top taxon (`qc_top_taxon_share`), and Shannon entropy (`qc_shannon`). Seamlessly augments sample metadata for downstream dplyr filtering pipelines.
+* `plot_qc()`: Publication-ready QC diagnostic scatter plot displaying sequencing depth versus observed feature richness with log scaling, metadata color mappings, and cutoff thresholds.
+* `summary.tidy_microbiome()`: Comprehensive S3 ecological summary method computing library size quantiles, global count matrix sparsity, taxonomic rank inventories, phylogenetic tree topology, and metadata dictionaries.
+
 ### Ecosystem Interoperability
 * Bidirectional conversion bridges:
   - `to_vegan()` and `from_vegan()` with wrappers for `run_permanova()` and `run_betadisper()`.
   - `to_phyloseq()`, `as_phyloseq()`, and `as_tidybiome()`.
   - `to_tse()`, `to_mia()`, `as_mia()`, and `as_tidybiome()`.
+  - `to_s7()`, `from_s7()`, and S7 generic dispatch (`as_tidybiome`) with formal `tidy_microbiome_s7` class definition supporting next-generation R OOP.
+

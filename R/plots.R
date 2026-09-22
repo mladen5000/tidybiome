@@ -658,3 +658,94 @@ plot_heatmap <- function(tb,
 
   p
 }
+
+#' Plot Sample Quality Control Diagnostics
+#'
+#' Generates publication-ready diagnostic scatter plots of sequencing library depth versus
+#' observed taxonomic richness, with optional threshold lines, log scaling, and metadata grouping.
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @param x Metric for the x-axis: `"total_reads"`, `"n_features"`, `"sparsity"`, or `"top_taxon_share"`.
+#'   Defaults to `"total_reads"`.
+#' @param y Metric for the y-axis. Defaults to `"n_features"`.
+#' @param color_by Optional metadata column to color points by.
+#' @param threshold_x Optional numeric threshold for vertical dashed cutoff line.
+#' @param threshold_y Optional numeric threshold for horizontal dashed cutoff line.
+#' @param log_x Logical; whether to log10-transform the x-axis (default: `TRUE` if `x == "total_reads"`).
+#' @param log_y Logical; whether to log10-transform the y-axis (default: `FALSE`).
+#' @param palette Palette name: `"tidybiome"` or `"nature"`.
+#'
+#' @return A `ggplot2::ggplot` object.
+#' @export
+#' @examples
+#' data(gut_microbiome)
+#' plot_qc(gut_microbiome, color_by = "treatment", threshold_x = 5000)
+plot_qc <- function(tb,
+                    x = "total_reads",
+                    y = "n_features",
+                    color_by = NULL,
+                    threshold_x = NULL,
+                    threshold_y = NULL,
+                    log_x = (x == "total_reads"),
+                    log_y = FALSE,
+                    palette = "tidybiome") {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+
+  col_x <- if (grepl("^qc_", x)) x else paste0("qc_", x)
+  col_y <- if (grepl("^qc_", y)) y else paste0("qc_", y)
+
+  meta <- tibble::as_tibble(tb)
+  if (!all(c(col_x, col_y) %in% colnames(meta))) {
+    tb <- calc_qc_metrics(tb, augment = TRUE)
+    meta <- tibble::as_tibble(tb)
+  }
+
+  aes_args <- list(x = rlang::sym(col_x), y = rlang::sym(col_y))
+  if (!is.null(color_by) && color_by %in% colnames(meta)) {
+    aes_args$color <- rlang::sym(color_by)
+  }
+
+  p <- ggplot2::ggplot(meta, do.call(ggplot2::aes, aes_args)) +
+    ggplot2::geom_point(size = 3.5, alpha = 0.85) +
+    scale_color_tidybiome(palette = palette) +
+    theme_tidybiome()
+
+  metric_labels <- c(
+    qc_total_reads = "Sequencing Depth (Total Reads)",
+    qc_n_features = "Observed Taxa (Richness)",
+    qc_sparsity = "Sample Sparsity (Fraction Zero)",
+    qc_top_taxon_share = "Dominance (Top Taxon Share)",
+    qc_shannon = "Shannon Entropy"
+  )
+  lab_x <- if (col_x %in% names(metric_labels)) metric_labels[[col_x]] else col_x
+  lab_y <- if (col_y %in% names(metric_labels)) metric_labels[[col_y]] else col_y
+
+  p <- p + ggplot2::labs(
+    title = "Sample Quality Control & Library Diagnostics",
+    x = lab_x,
+    y = lab_y
+  )
+
+  if (log_x) {
+    p <- p + ggplot2::scale_x_log10(labels = scales_comma_or_scientific)
+  }
+  if (log_y) {
+    p <- p + ggplot2::scale_y_log10(labels = scales_comma_or_scientific)
+  }
+
+  if (!is.null(threshold_x)) {
+    p <- p + ggplot2::geom_vline(xintercept = threshold_x, linetype = "dashed", color = "#e63946", linewidth = 0.8)
+  }
+  if (!is.null(threshold_y)) {
+    p <- p + ggplot2::geom_hline(yintercept = threshold_y, linetype = "dashed", color = "#e63946", linewidth = 0.8)
+  }
+
+  p
+}
+
+scales_comma_or_scientific <- function(x) {
+  format(x, scientific = FALSE, big.mark = ",", trim = TRUE)
+}
+

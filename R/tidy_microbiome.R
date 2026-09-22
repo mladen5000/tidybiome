@@ -388,3 +388,113 @@ cli_rule <- function(title = "") {
   chars <- paste(rep("\u2500", max(2, 50 - nchar(title))), collapse = "")
   paste0("\u2500\u2500 ", title, " ", chars)
 }
+
+#' Summary of a tidy_microbiome Object
+#'
+#' Computes comprehensive ecological, sequencing, and taxonomic summary statistics
+#' for a `tidy_microbiome` object.
+#'
+#' @param object A `tidy_microbiome` object.
+#' @param ... Additional arguments passed to methods (currently unused).
+#' @return An object of class `summary_tidy_microbiome` containing:
+#'   \item{n_samples}{Total number of samples.}
+#'   \item{n_taxa}{Total number of taxa.}
+#'   \item{depth_summary}{Named vector of sequencing depth statistics.}
+#'   \item{sparsity}{Global sparsity proportion (fraction of zeros in counts matrix).}
+#'   \item{assays}{Vector of assay names present and dimensions.}
+#'   \item{tax_ranks}{Named integer vector of distinct taxa at each taxonomic rank.}
+#'   \item{tree_info}{List containing tree presence, number of tips, internal nodes, and rooted status.}
+#'   \item{metadata_cols}{Character vector of sample metadata column names and data types.}
+#' @export
+summary.tidy_microbiome <- function(object, ...) {
+  n_samp <- nrow(object)
+  assays <- attr(object, "assays")
+  counts <- assays$counts
+  n_taxa <- if (!is.null(counts)) nrow(counts) else 0
+
+  if (!is.null(counts) && ncol(counts) > 0) {
+    depths <- colSums(counts)
+    depth_stats <- c(
+      Min = min(depths),
+      Q25 = stats::quantile(depths, 0.25, names = FALSE),
+      Median = stats::median(depths),
+      Mean = mean(depths),
+      Q75 = stats::quantile(depths, 0.75, names = FALSE),
+      Max = max(depths)
+    )
+    sparsity <- sum(counts == 0) / (nrow(counts) * ncol(counts))
+  } else {
+    depth_stats <- NULL
+    sparsity <- NA_real_
+  }
+
+  tax_df <- attr(object, "tax_table")
+  tax_ranks <- setdiff(colnames(tax_df), "taxon_id")
+  rank_counts <- if (length(tax_ranks) > 0 && !is.null(tax_df)) {
+    vapply(tax_ranks, function(r) length(unique(stats::na.omit(tax_df[[r]]))), integer(1))
+  } else {
+    integer(0)
+  }
+
+  tree <- attr(object, "phy_tree")
+  tree_info <- if (!is.null(tree) && inherits(tree, "phylo")) {
+    is_rooted <- if (requireNamespace("ape", quietly = TRUE)) ape::is.rooted(tree) else TRUE
+    list(
+      present = TRUE,
+      n_tips = length(tree$tip.label),
+      n_nodes = tree$Nnode,
+      is_rooted = is_rooted
+    )
+  } else {
+    list(present = FALSE)
+  }
+
+  meta_df <- tibble::as_tibble(object)
+  meta_dict <- vapply(meta_df, function(col) paste(class(col), collapse = "/"), character(1))
+
+  res <- list(
+    n_samples = n_samp,
+    n_taxa = n_taxa,
+    depth_summary = depth_stats,
+    sparsity = sparsity,
+    assays = names(assays),
+    tax_ranks = rank_counts,
+    tree_info = tree_info,
+    metadata_cols = meta_dict
+  )
+  class(res) <- "summary_tidy_microbiome"
+  res
+}
+
+#' @export
+print.summary_tidy_microbiome <- function(x, ...) {
+  cat(cli_rule(paste0("tidy_microbiome Summary [", x$n_samples, " samples \u00d7 ", x$n_taxa, " taxa]")), "\n")
+  cat("  \u2022 Assays:        ", paste(x$assays, collapse = ", "), "\n")
+  cat("  \u2022 Sparsity:      ", sprintf("%.1f%% (zeros in count matrix)", x$sparsity * 100), "\n")
+
+  if (!is.null(x$depth_summary)) {
+    cat(cli_rule("Sequencing Depth"), "\n")
+    ds <- x$depth_summary
+    cat(sprintf("    Min: %-8.0f  Q25: %-8.0f  Median: %-8.0f\n", ds["Min"], ds["Q25"], ds["Median"]))
+    cat(sprintf("    Mean: %-7.1f  Q75: %-8.0f  Max:    %-8.0f\n", ds["Mean"], ds["Q75"], ds["Max"]))
+  }
+
+  if (length(x$tax_ranks) > 0) {
+    cat(cli_rule("Taxonomic Hierarchy"), "\n")
+    rank_str <- paste(sprintf("%s: %d", names(x$tax_ranks), x$tax_ranks), collapse = " | ")
+    cat("    ", rank_str, "\n")
+  }
+
+  if (x$tree_info$present) {
+    cat(cli_rule("Phylogenetic Tree"), "\n")
+    cat(sprintf("    %d tips, %d internal nodes (%s)\n",
+                x$tree_info$n_tips, x$tree_info$n_nodes,
+                if (x$tree_info$is_rooted) "rooted" else "unrooted"))
+  }
+
+  cat(cli_rule(paste0("Sample Metadata (", length(x$metadata_cols), " variables)")), "\n")
+  vars_str <- paste(sprintf("%s <%s>", names(x$metadata_cols), x$metadata_cols), collapse = ", ")
+  cat("    ", strwrap(vars_str, width = 60, exdent = 4), sep = "\n")
+
+  invisible(x)
+}

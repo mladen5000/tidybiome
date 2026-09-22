@@ -167,8 +167,33 @@ cat("Generated publication-ready hierarchical clustered heatmap with annotation 
 temp_report <- tempfile(fileext = ".html")
 report_tidybiome(gut_clean, output = temp_report, browse = FALSE)
 cat(sprintf("Generated standalone HTML diagnostic cohort dashboard (%d bytes).\n", file.info(temp_report)$size))
-unlink(temp_report)
+# --- Step 13: Summary Profiling, Sample QC Suite, and Next-Gen S7 Interoperability ---
+cat("\n--- Step 13: Summary Profiling, Sample QC Suite, and Next-Gen S7 Interoperability ---\n")
+
+# 13a. Rich Ecological Summary
+cat("Ecological & Taxonomic Container Summary:\n")
+s_obj <- summary(gut_with_tree)
+print(s_obj)
+
+# 13b. Sample Quality Control Metrics & Filtering
+gut_qc <- calc_qc_metrics(gut_clean, augment = TRUE)
+cat(sprintf("Calculated per-sample QC metrics. Mean depth: %.0f reads, mean sparsity: %.1f%%\n",
+            mean(gut_qc$qc_total_reads), mean(gut_qc$qc_sparsity) * 100))
+
+# 13c. Publication QC Diagnostic Plot
+p_qc <- plot_qc(gut_qc, color_by = "treatment", threshold_x = 5000, threshold_y = 15)
+cat("Generated sample library size vs feature richness diagnostic plot.\n")
+
+# 13d. Next-Gen S7 Interoperability
+if (requireNamespace("S7", quietly = TRUE)) {
+  s7_obj <- to_s7(gut_clean)
+  cat(sprintf("Converted tidy_microbiome to formal S7 object: %s\n", class(s7_obj)[1]))
+  tb_from_s7 <- from_s7(s7_obj)
+  cat(sprintf("Seamlessly restored to tidy_microbiome S3 tibble: %d samples \u00d7 %d taxa.\n",
+              nrow(tb_from_s7), nrow(assay(tb_from_s7))))
+}
 
 message("\n>>> SUCCESS: Full tidybiome pipeline completed with zero errors!")
+
 
 

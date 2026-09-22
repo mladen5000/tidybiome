@@ -43,29 +43,28 @@ tidy_abundance <- function(tb, assay = "counts", rank = NULL, long = TRUE) {
     return(mat)
   }
 
-  # Build long format
+  # Build long format efficiently without expand.grid memory overhead
   sample_names <- colnames(mat)
   taxon_names  <- rownames(mat)
+  n_taxa <- length(taxon_names)
+  n_samp <- length(sample_names)
 
-  df_long <- expand.grid(
-    taxon_id  = taxon_names,
-    sample_id = sample_names,
-    stringsAsFactors = FALSE
+  df_long <- tibble::tibble(
+    taxon_id  = rep(taxon_names, times = n_samp),
+    sample_id = rep(sample_names, each = n_taxa),
+    abundance = as.vector(mat)
   )
-  df_long$abundance <- as.vector(mat)
 
   # Join with sample metadata
   sample_df <- tibble::as_tibble(tb)
-  res <- merge(df_long, sample_df, by = "sample_id", all.x = TRUE, sort = FALSE)
+  res <- dplyr::left_join(df_long, sample_df, by = "sample_id")
 
   # Join with taxonomy
   tax_df <- attr(tb, "tax_table")
   if (!is.null(tax_df) && nrow(tax_df) > 0) {
-    res <- merge(res, tax_df, by = "taxon_id", all.x = TRUE, sort = FALSE)
+    res <- dplyr::left_join(res, tax_df, by = "taxon_id")
   }
 
-  # Arrange nicely
-  res <- tibble::as_tibble(res)
   res
 }
 

@@ -97,59 +97,59 @@ get_distance <- function(tb, metric = NULL) {
 }
 
 calc_bray_curtis <- function(mat) {
-  n <- ncol(mat)
-  d_mat <- matrix(0, n, n)
-  for (j in 1:(n - 1)) {
-    for (k in (j + 1):n) {
-      denom <- sum(mat[, j] + mat[, k])
-      num <- sum(abs(mat[, j] - mat[, k]))
-      val <- if (denom > 0) num / denom else 0
-      d_mat[k, j] <- val
-      d_mat[j, k] <- val
-    }
+  if (requireNamespace("vegan", quietly = TRUE)) {
+    return(vegan::vegdist(t(mat), method = "bray"))
   }
+  num <- as.matrix(stats::dist(t(mat), method = "manhattan"))
+  cs <- colSums(mat, na.rm = TRUE)
+  denom <- outer(cs, cs, "+")
+  d_mat <- ifelse(denom > 0, num / denom, 0)
   dimnames(d_mat) <- list(colnames(mat), colnames(mat))
   stats::as.dist(d_mat)
 }
 
 calc_jaccard <- function(mat) {
-  pa <- mat > 0
-  n <- ncol(mat)
-  d_mat <- matrix(0, n, n)
-  for (j in 1:(n - 1)) {
-    for (k in (j + 1):n) {
-      inter <- sum(pa[, j] & pa[, k])
-      union_val <- sum(pa[, j] | pa[, k])
-      val <- if (union_val > 0) 1 - (inter / union_val) else 0
-      d_mat[k, j] <- val
-      d_mat[j, k] <- val
-    }
+  if (requireNamespace("vegan", quietly = TRUE)) {
+    return(vegan::vegdist(t(mat), method = "jaccard", binary = TRUE))
   }
+  pa <- (mat > 0) * 1
+  inter <- crossprod(pa)
+  sums <- colSums(pa)
+  union_mat <- outer(sums, sums, "+") - inter
+  d_mat <- ifelse(union_mat > 0, 1 - (inter / union_mat), 0)
+  diag(d_mat) <- 0
   dimnames(d_mat) <- list(colnames(mat), colnames(mat))
   stats::as.dist(d_mat)
 }
 
 calc_jsd <- function(mat) {
-  # Column-normalize to relative abundance
   prop <- calc_relabundance_matrix(mat)
   n <- ncol(prop)
-  d_mat <- matrix(0, n, n)
+  sample_names <- colnames(prop)
 
+  # Precompute Shannon entropy for each column: H(p) = -sum(p * log(p))
+  ent <- apply(prop, 2, function(col) {
+    pos <- col[col > 0]
+    if (length(pos) == 0) return(0)
+    -sum(pos * log(pos))
+  })
+
+  d_mat <- matrix(0, n, n, dimnames = list(sample_names, sample_names))
   for (j in 1:(n - 1)) {
     p <- prop[, j]
+    h_p <- ent[j]
     for (k in (j + 1):n) {
       q <- prop[, k]
+      h_q <- ent[k]
       m <- 0.5 * (p + q)
-
-      kl_pm <- sum(ifelse(p > 0, p * log(p / m), 0))
-      kl_qm <- sum(ifelse(q > 0, q * log(q / m), 0))
-      jsd_val <- 0.5 * kl_pm + 0.5 * kl_qm
-      val <- sqrt(max(0, jsd_val))
+      pos_m <- m[m > 0]
+      h_m <- -sum(pos_m * log(pos_m))
+      jsd_val <- max(0, h_m - 0.5 * (h_p + h_q))
+      val <- sqrt(jsd_val)
       d_mat[k, j] <- val
       d_mat[j, k] <- val
     }
   }
-  dimnames(d_mat) <- list(colnames(mat), colnames(mat))
   stats::as.dist(d_mat)
 }
 

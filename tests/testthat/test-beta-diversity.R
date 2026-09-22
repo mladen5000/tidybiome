@@ -28,6 +28,24 @@ test_that("Bray-Curtis and JSD distances calculate valid dissimilarities", {
   expect_true(all(d_jsd >= 0))
 })
 
+test_that("vectorized bray and jaccard match vegan vegdist exactly", {
+  counts <- matrix(c(10, 0, 5, 20, 10, 0, 5, 5, 5), nrow = 3, ncol = 3,
+                   dimnames = list(c("A", "B", "C"), c("S1", "S2", "S3")))
+  tb <- tidy_microbiome(counts)
+  tb_bray <- calc_beta_diversity(tb, metric = "bray")
+  d_bray <- get_distance(tb_bray, "bray")
+  
+  if (requireNamespace("vegan", quietly = TRUE)) {
+    veg_bray <- vegan::vegdist(t(counts), method = "bray")
+    expect_equal(as.matrix(d_bray), as.matrix(veg_bray), tolerance = 1e-6)
+    
+    tb_jacc <- calc_beta_diversity(tb, metric = "jaccard")
+    d_jacc <- get_distance(tb_jacc, "jaccard")
+    veg_jacc <- vegan::vegdist(t(counts), method = "jaccard", binary = TRUE)
+    expect_equal(as.matrix(d_jacc), as.matrix(veg_jacc), tolerance = 1e-6)
+  }
+})
+
 test_that("Tree-Wasserstein and DTH test evaluate beta diversity and homogeneity", {
   counts <- matrix(c(50, 10, 5, 2,
                      5,  40, 50, 60), nrow = 2, byrow = TRUE,

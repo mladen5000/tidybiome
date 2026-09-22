@@ -269,7 +269,7 @@ Generate a standalone, zero-dependency HTML quality control dashboard:
 tmp_report <- tempfile(fileext = ".html")
 report_tidybiome(gut_clean, output = tmp_report, browse = FALSE)
 cat("Generated dashboard report at:", tmp_report, "\n")
-#> Generated dashboard report at: /tmp/RtmprzDcJK/file1f0f7d2881da.html
+#> Generated dashboard report at: /tmp/RtmpI8bLna/file1daf127e7dec.html
 unlink(tmp_report)
 ```
 

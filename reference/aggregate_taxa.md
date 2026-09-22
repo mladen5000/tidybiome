@@ -1,7 +1,8 @@
 # Aggregate Taxa to a Higher Taxonomic Rank
 
 Agglomerates/merges features (ASVs/OTUs) by a specified taxonomic rank
-(e.g., Phylum, Family, Genus) by summing abundances across all assays.
+(e.g., Phylum, Family, Genus) by summing abundances across all assays
+using compiled C-level primitives.
 
 ## Usage
 
@@ -26,4 +27,13 @@ aggregate_taxa(tb, rank, na.rm = FALSE)
 
 ## Value
 
-A new `tidy_microbiome` object aggregated at the specified rank.
+An updated `tidy_microbiome` object aggregated at the specified rank.
+
+## Examples
+
+``` r
+data(gut_microbiome)
+tb_phylum <- aggregate_taxa(gut_microbiome, rank = "Phylum")
+dim(assay(tb_phylum))
+#> [1]  4 24
+```

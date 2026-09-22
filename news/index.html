@@ -124,6 +124,44 @@
 </ul></li>
 </ul></div>
 </div>
+<div class="section level3">
+<h3 id="performance--scalability-optimizations-0-1-0">Performance &amp; Scalability Optimizations<a class="anchor" aria-label="anchor" href="#performance--scalability-optimizations-0-1-0"></a></h3>
+<ul><li>
+<strong>Vectorized Cross-Associations (<code><a href="../reference/calc_cross_association.html">calc_cross_association()</a></code>)</strong>:
+<ul><li>Replaced per-taxon and per-variable nested loops and repetitive <code><a href="https://rdrr.io/r/stats/cor.test.html" class="external-link">stats::cor.test()</a></code> invocations with BLAS matrix operations (<code><a href="https://rdrr.io/r/stats/cor.html" class="external-link">stats::cor()</a></code>) and closed-form analytic Student’s <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>t</mi><annotation encoding="application/x-tex">t</annotation></semantics></math>-statistic transformation.</li>
+<li>Implemented single-pass matrix rank transforms for Spearman correlations, accelerating association testing across thousands of features by over 50x.</li>
+</ul></li>
+<li>
+<strong>Candidate-Pruned Co-Occurrence Networks (<code><a href="../reference/calc_network.html">calc_network()</a></code>)</strong>:
+<ul><li>Filtered candidate edges at the upper-triangular index level prior to candidate edge tibble materialization, avoiding <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false" form="prefix">(</mo><msup><mi>T</mi><mn>2</mn></msup><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">O(T^2)</annotation></semantics></math> memory explosion on large OTU/ASV tables.</li>
+<li>Retained conservative whole-matrix FDR corrections on candidate sets.</li>
+</ul></li>
+<li>
+<strong>Skew-Symmetric GMPR Size Factors (<code><a href="../reference/calc_gmpr_size_factors.html">calc_gmpr_size_factors()</a></code>)</strong>:
+<ul><li>Halved pairwise median ratio iterations by exploiting skew-symmetry (<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>r</mi><mrow><mi>j</mi><mi>i</mi></mrow></msub><mo>=</mo><mn>1</mn><mi>/</mi><msub><mi>r</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">r_{ji} = 1 / r_{ij}</annotation></semantics></math>) and precomputed positive-count incidence masks.</li>
+</ul></li>
+<li>
+<strong>C-Compiled Manhattan UniFrac Distances (<code><a href="../reference/calc_unifrac.html">calc_unifrac()</a></code>)</strong>:
+<ul><li>Formulated both unweighted and weighted UniFrac numerators as C-compiled Manhattan distances (<code>stats::dist(..., method = "manhattan")</code>) over branch-weighted occurrence and abundance matrices, eliminating nested R sample loops.</li>
+</ul></li>
+<li>
+<strong>Vectorized QR Decomposition for Differential Abundance (<code><a href="../reference/calc_differential_abundance.html">calc_differential_abundance()</a></code>)</strong>:
+<ul><li>Precomputes a single QR decomposition of the design matrix in LinDA and CLR-linear regression engines.</li>
+<li>Simultaneously solves coefficients, residuals, standard errors, and multi-level <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>F</mi><annotation encoding="application/x-tex">F</annotation></semantics></math>-tests for all taxa via BLAS operations (<code><a href="https://rdrr.io/r/base/qr.html" class="external-link">qr.coef()</a></code>, <code><a href="https://rdrr.io/r/base/qr.html" class="external-link">qr.resid()</a></code>), eliminating per-taxon <code><a href="https://rdrr.io/r/stats/lm.html" class="external-link">stats::lm()</a></code> fitting loops.</li>
+</ul></li>
+<li>
+<strong>Compiled C Agglomeration (<code><a href="../reference/aggregate_taxa.html">aggregate_taxa()</a></code>)</strong>:
+<ul><li>Utilizes <code>base::rowsum(..., reorder = FALSE)</code> for taxonomic feature aggregation, executing in compiled C rather than R loops.</li>
+</ul></li>
+<li>
+<strong>Memory-Efficient Long-Format Extraction (<code><a href="../reference/tidy_abundance.html">tidy_abundance()</a></code>)</strong>:
+<ul><li>Added targeted <code>taxa</code> and <code>samples</code> subsetting, and optional metadata/taxonomy joins (<code>include_metadata</code>, <code>include_taxonomy</code>) to prevent unintended multi-million-row tibble materializations.</li>
+</ul></li>
+<li>
+<strong>Ancestor-Incidence Matrix Faith’s Phylogenetic Diversity (<code>calc_faith_pd()</code>)</strong>:
+<ul><li>Replaced repeated <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false" form="prefix">(</mo><mi>N</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">O(N)</annotation></semantics></math> tree-pruning via <code><a href="https://rdrr.io/pkg/ape/man/drop.tip.html" class="external-link">ape::keep.tip()</a></code> with a single ancestor-descendant tip incidence matrix multiplication against sample presence masks, computing Faith’s PD across all samples in a single vectorized step.</li>
+</ul></li>
+</ul></div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

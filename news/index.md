@@ -160,3 +160,61 @@ tidyverse-native Swiss Army knife for downstream microbiome analysis.
     [`from_s7()`](https://tidybiome.org/reference/from_s7.md), and S7
     generic dispatch (`as_tidybiome`) with formal `tidy_microbiome_s7`
     class definition supporting next-generation R OOP.
+
+### Performance & Scalability Optimizations
+
+- **Vectorized Cross-Associations
+  ([`calc_cross_association()`](https://tidybiome.org/reference/calc_cross_association.md))**:
+  - Replaced per-taxon and per-variable nested loops and repetitive
+    [`stats::cor.test()`](https://rdrr.io/r/stats/cor.test.html)
+    invocations with BLAS matrix operations
+    ([`stats::cor()`](https://rdrr.io/r/stats/cor.html)) and closed-form
+    analytic Student’s $`t`$-statistic transformation.
+  - Implemented single-pass matrix rank transforms for Spearman
+    correlations, accelerating association testing across thousands of
+    features by over 50x.
+- **Candidate-Pruned Co-Occurrence Networks
+  ([`calc_network()`](https://tidybiome.org/reference/calc_network.md))**:
+  - Filtered candidate edges at the upper-triangular index level prior
+    to candidate edge tibble materialization, avoiding $`O(T^2)`$ memory
+    explosion on large OTU/ASV tables.
+  - Retained conservative whole-matrix FDR corrections on candidate
+    sets.
+- **Skew-Symmetric GMPR Size Factors
+  ([`calc_gmpr_size_factors()`](https://tidybiome.org/reference/calc_gmpr_size_factors.md))**:
+  - Halved pairwise median ratio iterations by exploiting skew-symmetry
+    ($`r_{ji} = 1 / r_{ij}`$) and precomputed positive-count incidence
+    masks.
+- **C-Compiled Manhattan UniFrac Distances
+  ([`calc_unifrac()`](https://tidybiome.org/reference/calc_unifrac.md))**:
+  - Formulated both unweighted and weighted UniFrac numerators as
+    C-compiled Manhattan distances
+    (`stats::dist(..., method = "manhattan")`) over branch-weighted
+    occurrence and abundance matrices, eliminating nested R sample
+    loops.
+- **Vectorized QR Decomposition for Differential Abundance
+  ([`calc_differential_abundance()`](https://tidybiome.org/reference/calc_differential_abundance.md))**:
+  - Precomputes a single QR decomposition of the design matrix in LinDA
+    and CLR-linear regression engines.
+  - Simultaneously solves coefficients, residuals, standard errors, and
+    multi-level $`F`$-tests for all taxa via BLAS operations
+    ([`qr.coef()`](https://rdrr.io/r/base/qr.html),
+    [`qr.resid()`](https://rdrr.io/r/base/qr.html)), eliminating
+    per-taxon [`stats::lm()`](https://rdrr.io/r/stats/lm.html) fitting
+    loops.
+- **Compiled C Agglomeration
+  ([`aggregate_taxa()`](https://tidybiome.org/reference/aggregate_taxa.md))**:
+  - Utilizes `base::rowsum(..., reorder = FALSE)` for taxonomic feature
+    aggregation, executing in compiled C rather than R loops.
+- **Memory-Efficient Long-Format Extraction
+  ([`tidy_abundance()`](https://tidybiome.org/reference/tidy_abundance.md))**:
+  - Added targeted `taxa` and `samples` subsetting, and optional
+    metadata/taxonomy joins (`include_metadata`, `include_taxonomy`) to
+    prevent unintended multi-million-row tibble materializations.
+- **Ancestor-Incidence Matrix Faith’s Phylogenetic Diversity
+  (`calc_faith_pd()`)**:
+  - Replaced repeated $`O(N)`$ tree-pruning via
+    [`ape::keep.tip()`](https://rdrr.io/pkg/ape/man/drop.tip.html) with
+    a single ancestor-descendant tip incidence matrix multiplication
+    against sample presence masks, computing Faith’s PD across all
+    samples in a single vectorized step.

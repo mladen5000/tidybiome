@@ -251,7 +251,7 @@ head(net$edges, 5)
 #>   <chr> <chr>       <dbl>         <dbl>       <dbl>  <dbl> <chr>    
 #> 1 ASV01 ASV02       0.876 0.0000000211  0.000000548  0.876 positive 
 #> 2 ASV01 ASV03       0.887 0.00000000780 0.000000338  0.887 positive 
-#> 3 ASV02 ASV03       0.897 0.00000000309 0.000000193  0.897 positive 
+#> 3 ASV02 ASV03       0.897 0.00000000309 0.000000219  0.897 positive 
 #> 4 ASV01 ASV04      -0.552 0.00516       0.0107       0.552 negative 
 #> 5 ASV02 ASV04      -0.465 0.0221        0.0371       0.465 negative
 ```

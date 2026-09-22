@@ -1,8 +1,8 @@
 # Calculate Microbial Co-Occurrence Network
 
 Evaluates pairwise co-occurrence correlations across taxa and constructs
-network nodes and edges filtered by correlation strength and statistical
-significance.
+a network representation including edge lists, node degree, and
+community structures.
 
 ## Usage
 
@@ -10,9 +10,9 @@ significance.
 calc_network(
   tb,
   assay = "counts",
-  method = c("spearman", "pearson"),
+  method = "spearman",
   min_prevalence = 0.2,
-  r_cutoff = 0.4,
+  r_cutoff = 0.3,
   p_cutoff = 0.05,
   p_adj_method = "BH"
 )
@@ -26,40 +26,58 @@ calc_network(
 
 - assay:
 
-  Assay to evaluate. Defaults to `"counts"`.
+  Name of assay to compute correlations on (default: `"counts"`).
 
 - method:
 
-  Correlation method: `"spearman"` or `"pearson"`. Defaults to
-  `"spearman"`.
+  Correlation method: `"spearman"` (default), `"pearson"`, or
+  `"kendall"`.
 
 - min_prevalence:
 
-  Minimum proportion of samples where taxon must be detected (default:
-  0.20).
+  Minimum taxon prevalence threshold (0-1) to filter before correlation.
 
 - r_cutoff:
 
-  Minimum absolute correlation coefficient threshold (default: 0.40).
+  Absolute correlation magnitude threshold for retaining edges (default:
+  0.3).
 
 - p_cutoff:
 
-  Maximum multiple testing adjusted p-value threshold (default: 0.05).
+  Adjusted p-value threshold for edge significance (default: 0.05).
 
 - p_adj_method:
 
-  Multiple testing adjustment method (default: `"BH"`).
+  Multiple testing correction method (default: `"BH"`).
 
 ## Value
 
-An S3 object of class `tidybiome_network` containing:
+A `tidybiome_network` object containing:
 
-- `nodes`: Tibble of network nodes with `taxon_id`, `degree`,
-  `mean_abundance`, and taxonomy.
+- nodes:
 
-- `edges`: Tibble of network edges with `from`, `to`, `correlation`,
-  `p_value`, `padj`, `weight`, and `direction`.
+  Tibble of taxa, taxonomy, and node degree.
 
-- `r_cutoff`: Filtering cutoff for r.
+- edges:
 
-- `p_cutoff`: Filtering cutoff for p.
+  Tibble of significant pairwise edges, correlation, and p-values.
+
+- adjacency:
+
+  Filtered adjacency matrix.
+
+- params:
+
+  List of parameter settings.
+
+## Examples
+
+``` r
+data(gut_microbiome)
+net <- calc_network(gut_microbiome, min_prevalence = 0.5, r_cutoff = 0.3)
+print(net)
+#> -- tidybiome_network (Microbial Co-Occurrence Network) --
+#>   * Nodes (Taxa): 38
+#>   * Significant edges: 491 (|r| >= 0.30, padj <= 0.05)
+#>   * Positive: 404, Negative: 87
+```

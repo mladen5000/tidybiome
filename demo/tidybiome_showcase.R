@@ -118,12 +118,40 @@ assoc_res <- calc_cross_association(gut_clean, variables = c("age", "depth"))
 cat("\nTop 4 Cross-Associations with Host Covariates:\n")
 print(head(assoc_res[, c("taxon_id", "variable", "correlation", "padj")], 4))
 
-# 10e. ape Tree Integration
+# 10e. ape Tree Integration & UniFrac Distances
 taxa_ids <- attr(gut_clean, "tax_table")$taxon_id
 set.seed(123)
 tree <- ape::rtree(length(taxa_ids), tip.label = taxa_ids)
 gut_with_tree <- set_tree(gut_clean, tree)
 cat(sprintf("\nSuccessfully attached ape::phylo tree with %d tips.\n", length(get_tree(gut_with_tree)$tip.label)))
 
+# 11. New Parity & Rigor Features
+message("\n--- Step 11: Parity & Rigor Suite (UniFrac, Formula DA, db-RDA, Networks) ---")
+# 11a. UniFrac distances
+gut_with_tree <- calc_beta_diversity(gut_with_tree, metric = "unifrac")
+gut_with_tree <- calc_beta_diversity(gut_with_tree, metric = "wunifrac")
+cat("Computed Unweighted UniFrac and Weighted Normalized UniFrac distances.\n")
+
+# 11b. Formula DA with covariate adjustment
+da_cov <- calc_differential_abundance(gut_clean, formula = ~ treatment + age, contrast = "treatment")
+cat(sprintf("Ran formula-based DA with covariate adjustment (age). Significant taxa: %d\n", sum(da_cov$is_significant)))
+
+# 11c. Distance-based Redundancy Analysis (db-RDA)
+dbrda_res <- run_dbrda(gut_clean, ~ treatment + age, distance = "bray")
+print(dbrda_res)
+p_dbrda <- plot_dbrda(dbrda_res, color = "treatment")
+
+# 11d. Microbial Co-Occurrence Network
+net_res <- calc_network(gut_clean, method = "spearman", min_prevalence = 0.3, r_cutoff = 0.3, p_cutoff = 0.05)
+print(net_res)
+p_net <- plot_network(net_res)
+
+# 11e. Data Integrity and Taxon Filtering
+tb_filt_taxa <- filter_taxa(gut_with_tree, Phylum == "Bacteroidota")
+cat(sprintf("Filtered taxa by Phylum: remaining taxa = %d, tree tips = %d.\n",
+            nrow(attr(tb_filt_taxa, "tax_table")), length(get_tree(tb_filt_taxa)$tip.label)))
+cat(sprintf("Container validation passed: %s\n", validate_tidy_microbiome(tb_filt_taxa)))
+
 message("\n>>> SUCCESS: Full tidybiome pipeline completed with zero errors!")
+
 

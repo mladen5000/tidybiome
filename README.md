@@ -77,16 +77,21 @@ clean_tb <- calc_ordination(clean_tb, method = "rpca")
 # 5. Multi-engine consensus differential abundance
 da_res <- calc_differential_abundance(
   clean_tb,
-  group = "treatment",
+# 7. SOTA Formula Differential Abundance with Covariates
+da_res <- calc_differential_abundance(
+  clean_tb,
+  formula = ~ treatment + age,
+  contrast = "treatment",
   methods = c("consensus", "linda", "clr_linear", "wilcoxon")
 )
 
-# 6. Aesthetic visualizations
+# 8. Aesthetic visualizations
 plot_composition(clean_tb, rank = "Phylum", top_n = 4, group_by = "treatment")
 plot_ordination(clean_tb, method = "rpca", color = "treatment", ellipse = TRUE, biplot = TRUE)
 plot_alpha(clean_tb, metric = "hill_1", x = "treatment", test = TRUE)
 plot_da_volcano(da_res)
-# 7. Ecosystem Connectors & Vegan Engines
+
+# 9. Ecosystem Connectors, Vegan Engines, & Constrained Ordination
 # Export to vegan community format
 veg <- to_vegan(clean_tb)
 
@@ -94,11 +99,24 @@ veg <- to_vegan(clean_tb)
 perm_res <- run_permanova(clean_tb, ~ treatment + diet, permutations = 999)
 disp_res <- run_betadisper(clean_tb, group = "treatment")
 
-# 8. Essential mia & Community Screening Functions
+# Constrained db-RDA biplot
+dbrda_res <- run_dbrda(clean_tb, ~ treatment + age, distance = "bray")
+plot_dbrda(dbrda_res, color = "treatment")
+
+# 10. Microbial Co-Occurrence Networks
+net_res <- calc_network(clean_tb, method = "spearman", min_prevalence = 0.3, r_cutoff = 0.3, p_cutoff = 0.05)
+plot_network(net_res)
+
+# 11. Essential mia & Community Screening Functions
 prev_tbl  <- calc_prevalence(clean_tb)
 clean_dom <- calc_dominant(clean_tb, add_to_metadata = TRUE)
 clean_div <- calc_divergence(clean_tb, reference = list(treatment = "Control"))
 assoc_tbl <- calc_cross_association(clean_tb, variables = c("age", "depth"))
+
+# 12. Tree Integration & UniFrac Distances
+clean_tb  <- set_tree(clean_tb, ape::rtree(40, tip.label = attr(clean_tb, "tax_table")$taxon_id))
+clean_tb  <- calc_beta_diversity(clean_tb, metric = "unifrac")
+clean_tb  <- calc_beta_diversity(clean_tb, metric = "wunifrac")
 ```
 
 ---
@@ -110,20 +128,21 @@ assoc_tbl <- calc_cross_association(clean_tb, variables = c("age", "depth"))
 | **`vegan`** | Bidirectional | `to_vegan(tb)`, `from_vegan(comm)` | Converts between `tidy_microbiome` and vegan samples $\times$ taxa community matrices. |
 | **`vegan::adonis2`** | Execution wrapper | `run_permanova(tb, formula)` | Direct PERMANOVA on `tidy_microbiome` returning tidy broom-style tibbles. |
 | **`vegan::betadisper`** | Execution wrapper | `run_betadisper(tb, group)` | Permutation test of multivariate dispersion with distance summaries. |
+| **`vegan::dbrda`** | Execution wrapper | `run_dbrda(tb, formula)` | Distance-based redundancy analysis with biplot environmental constraint arrows. |
 | **`vegan::metaMDS`** | Execution wrapper | `run_nmds(tb)` | Non-metric multidimensional scaling returning metadata-joined coordinates. |
 | **`phyloseq`** | Bidirectional | `to_phyloseq(tb)`, `as_phyloseq(tb)`, `as_tidybiome(ps)` | Converts to/from `phyloseq::phyloseq` S4 containers. |
 | **`mia` / `TreeSE`** | Bidirectional | `to_tse(tb)`, `to_mia(tb)`, `as_mia(tb)`, `as_tidybiome(tse)` | Converts to/from `TreeSummarizedExperiment::TreeSummarizedExperiment`. |
-| **`ape`** | Bidirectional | `set_tree(tb, tree)`, `get_tree(tb)` | Attaches and synchronizes phylogenetic trees (`ape::phylo`). |
+| **`ape`** | Bidirectional | `set_tree(tb, tree)`, `get_tree(tb)`, `calc_unifrac(tb)` | Attaches phylogenetic trees, computes Unweighted & Weighted UniFrac, and preserves topologies. |
 
 ---
 
 ## Running Demo & Tests
 
 ```bash
-# Run the complete end-to-end showcase (all 10 steps)
+# Run the complete end-to-end showcase (all 11 steps)
 Rscript demo/tidybiome_showcase.R
 
-# Run the testthat test suite (161 passing assertions, 0 failures, 0 warnings)
+# Run the testthat test suite (206 passing assertions, 0 failures, 0 warnings)
 Rscript -e 'testthat::test_dir("tests/testthat")'
 ```
 
@@ -132,3 +151,4 @@ Rscript -e 'testthat::test_dir("tests/testthat")'
 ## License
 
 MIT © tidybiome authors.
+

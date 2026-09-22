@@ -350,8 +350,8 @@ run_caft_engine <- function(counts, pred_df, target_var, covariate_vars, is_cont
     # Occurrence LRT
     w_zero <- 0
     if (length(unique(z)) == 2) {
-      fit_null <- tryCatch(stats::glm(stats::as.formula(null_f), data = pred_df, family = stats::binomial()), error = function(e) NULL)
-      fit_full <- tryCatch(stats::glm(stats::as.formula(full_f), data = pred_df, family = stats::binomial()), error = function(e) NULL)
+      fit_null <- suppressWarnings(tryCatch(stats::glm(stats::as.formula(null_f), data = pred_df, family = stats::binomial()), error = function(e) NULL))
+      fit_full <- suppressWarnings(tryCatch(stats::glm(stats::as.formula(full_f), data = pred_df, family = stats::binomial()), error = function(e) NULL))
       if (!is.null(fit_null) && !is.null(fit_full)) {
         lrt_val <- as.numeric(2 * (stats::logLik(fit_full) - stats::logLik(fit_null)))
         w_zero <- max(0, lrt_val)

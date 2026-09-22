@@ -4,7 +4,16 @@
 \alias{tidy_abundance}
 \title{Extract Abundance Data in Tidy Format}
 \usage{
-tidy_abundance(tb, assay = "counts", rank = NULL, long = TRUE)
+tidy_abundance(
+  tb,
+  assay = "counts",
+  rank = NULL,
+  long = TRUE,
+  taxa = NULL,
+  samples = NULL,
+  include_metadata = TRUE,
+  include_taxonomy = TRUE
+)
 }
 \arguments{
 \item{tb}{A \code{tidy_microbiome} object.}
@@ -17,6 +26,14 @@ Defaults to \code{"counts"}.}
 \item{long}{Logical. If \code{TRUE} (default), returns a fully denormalized long tibble
 containing \code{sample_id}, \code{taxon_id}, \code{abundance}, sample metadata, and taxonomy.
 If \code{FALSE}, returns the abundance matrix directly.}
+
+\item{taxa}{Optional character vector of taxon IDs to filter down before long-format expansion.}
+
+\item{samples}{Optional character vector of sample IDs to filter down before long-format expansion.}
+
+\item{include_metadata}{Logical; whether to join sample metadata in long format (default: \code{TRUE}).}
+
+\item{include_taxonomy}{Logical; whether to join taxonomy metadata in long format (default: \code{TRUE}).}
 }
 \value{
 A \link[tibble:tbl_df]{tibble::tbl_df} if \code{long = TRUE}, or a numeric matrix if \code{long = FALSE}.

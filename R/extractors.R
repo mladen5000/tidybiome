@@ -19,10 +19,21 @@ tidy_taxa <- function(tb) {
 #' @param long Logical. If `TRUE` (default), returns a fully denormalized long tibble
 #'   containing `sample_id`, `taxon_id`, `abundance`, sample metadata, and taxonomy.
 #'   If `FALSE`, returns the abundance matrix directly.
+#' @param taxa Optional character vector of taxon IDs to filter down before long-format expansion.
+#' @param samples Optional character vector of sample IDs to filter down before long-format expansion.
+#' @param include_metadata Logical; whether to join sample metadata in long format (default: `TRUE`).
+#' @param include_taxonomy Logical; whether to join taxonomy metadata in long format (default: `TRUE`).
 #'
 #' @return A [tibble::tbl_df] if `long = TRUE`, or a numeric matrix if `long = FALSE`.
 #' @export
-tidy_abundance <- function(tb, assay = "counts", rank = NULL, long = TRUE) {
+tidy_abundance <- function(tb,
+                           assay = "counts",
+                           rank = NULL,
+                           long = TRUE,
+                           taxa = NULL,
+                           samples = NULL,
+                           include_metadata = TRUE,
+                           include_taxonomy = TRUE) {
   if (!inherits(tb, "tidy_microbiome")) {
     stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
   }
@@ -39,11 +50,20 @@ tidy_abundance <- function(tb, assay = "counts", rank = NULL, long = TRUE) {
 
   mat <- assays[[assay]]
 
+  # Optional pre-filtering before expansion
+  if (!is.null(taxa)) {
+    common_taxa <- intersect(taxa, rownames(mat))
+    mat <- mat[common_taxa, , drop = FALSE]
+  }
+  if (!is.null(samples)) {
+    common_samples <- intersect(samples, colnames(mat))
+    mat <- mat[, common_samples, drop = FALSE]
+  }
+
   if (!long) {
     return(mat)
   }
 
-  # Build long format efficiently without expand.grid memory overhead
   sample_names <- colnames(mat)
   taxon_names  <- rownames(mat)
   n_taxa <- length(taxon_names)
@@ -55,38 +75,56 @@ tidy_abundance <- function(tb, assay = "counts", rank = NULL, long = TRUE) {
     abundance = as.vector(mat)
   )
 
-  # Join with sample metadata
-  sample_df <- tibble::as_tibble(tb)
-  res <- dplyr::left_join(df_long, sample_df, by = "sample_id")
-
-  # Join with taxonomy
-  tax_df <- attr(tb, "tax_table")
-  if (!is.null(tax_df) && nrow(tax_df) > 0) {
-    res <- dplyr::left_join(res, tax_df, by = "taxon_id")
+  # Join with sample metadata if requested
+  if (include_metadata) {
+    sample_df <- tibble::as_tibble(tb)
+    if (!is.null(samples)) {
+      sample_df <- sample_df[sample_df$sample_id %in% sample_names, , drop = FALSE]
+    }
+    df_long <- dplyr::left_join(df_long, sample_df, by = "sample_id")
   }
 
-  res
+  # Join with taxonomy if requested
+  if (include_taxonomy) {
+    tax_df <- attr(tb, "tax_table")
+    if (!is.null(tax_df) && nrow(tax_df) > 0) {
+      if (!is.null(taxa)) {
+        tax_df <- tax_df[tax_df$taxon_id %in% taxon_names, , drop = FALSE]
+      }
+      df_long <- dplyr::left_join(df_long, tax_df, by = "taxon_id")
+    }
+  }
+
+  df_long
 }
 
 #' Aggregate Taxa to a Higher Taxonomic Rank
 #'
 #' @description
 #' Agglomerates/merges features (ASVs/OTUs) by a specified taxonomic rank (e.g., Phylum, Family, Genus)
-#' by summing abundances across all assays.
+#' by summing abundances across all assays using compiled C-level primitives.
 #'
 #' @param tb A `tidy_microbiome` object.
 #' @param rank Character string specifying the taxonomic column to aggregate by.
 #' @param na.rm Logical. If `TRUE`, removes unassigned taxa. If `FALSE` (default), groups them as `"Unclassified"`.
 #'
-#' @return A new `tidy_microbiome` object aggregated at the specified rank.
+#' @return An updated `tidy_microbiome` object aggregated at the specified rank.
 #' @export
+#' @examples
+#' data(gut_microbiome)
+#' tb_phylum <- aggregate_taxa(gut_microbiome, rank = "Phylum")
+#' dim(assay(tb_phylum))
 aggregate_taxa <- function(tb, rank, na.rm = FALSE) {
   if (!inherits(tb, "tidy_microbiome")) {
     stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
   }
 
   tax_df <- attr(tb, "tax_table")
-  if (is.null(tax_df) || !rank %in% colnames(tax_df)) {
+  if (is.null(tax_df)) {
+    stop("Taxonomy table is missing; cannot aggregate taxa.", call. = FALSE)
+  }
+
+  if (!rank %in% colnames(tax_df)) {
     stop(sprintf("Rank '%s' not found in taxonomy table.", rank), call. = FALSE)
   }
 
@@ -102,19 +140,10 @@ aggregate_taxa <- function(tb, rank, na.rm = FALSE) {
   unique_ranks <- unique(group_vec)
   assays <- attr(tb, "assays")
 
+  # Vectorized C-level rowsum across all assays
   new_assays <- lapply(assays, function(mat) {
     if (na.rm) mat <- mat[keep_idx, , drop = FALSE]
-    res_mat <- matrix(0, nrow = length(unique_ranks), ncol = ncol(mat),
-                      dimnames = list(unique_ranks, colnames(mat)))
-    for (ur in unique_ranks) {
-      idx <- which(group_vec == ur)
-      if (length(idx) == 1) {
-        res_mat[ur, ] <- mat[idx, ]
-      } else {
-        res_mat[ur, ] <- colSums(mat[idx, , drop = FALSE], na.rm = TRUE)
-      }
-    }
-    res_mat
+    base::rowsum(mat, group = group_vec, reorder = FALSE, na.rm = TRUE)
   })
 
   # Aggregate taxonomy table

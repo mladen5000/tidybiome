@@ -7,9 +7,9 @@
 calc_network(
   tb,
   assay = "counts",
-  method = c("spearman", "pearson"),
+  method = "spearman",
   min_prevalence = 0.2,
-  r_cutoff = 0.4,
+  r_cutoff = 0.3,
   p_cutoff = 0.05,
   p_adj_method = "BH"
 )
@@ -17,28 +17,31 @@ calc_network(
 \arguments{
 \item{tb}{A \code{tidy_microbiome} object.}
 
-\item{assay}{Assay to evaluate. Defaults to \code{"counts"}.}
+\item{assay}{Name of assay to compute correlations on (default: \code{"counts"}).}
 
-\item{method}{Correlation method: \code{"spearman"} or \code{"pearson"}. Defaults to \code{"spearman"}.}
+\item{method}{Correlation method: \code{"spearman"} (default), \code{"pearson"}, or \code{"kendall"}.}
 
-\item{min_prevalence}{Minimum proportion of samples where taxon must be detected (default: 0.20).}
+\item{min_prevalence}{Minimum taxon prevalence threshold (0-1) to filter before correlation.}
 
-\item{r_cutoff}{Minimum absolute correlation coefficient threshold (default: 0.40).}
+\item{r_cutoff}{Absolute correlation magnitude threshold for retaining edges (default: 0.3).}
 
-\item{p_cutoff}{Maximum multiple testing adjusted p-value threshold (default: 0.05).}
+\item{p_cutoff}{Adjusted p-value threshold for edge significance (default: 0.05).}
 
-\item{p_adj_method}{Multiple testing adjustment method (default: \code{"BH"}).}
+\item{p_adj_method}{Multiple testing correction method (default: \code{"BH"}).}
 }
 \value{
-An S3 object of class \code{tidybiome_network} containing:
-\itemize{
-\item \code{nodes}: Tibble of network nodes with \code{taxon_id}, \code{degree}, \code{mean_abundance}, and taxonomy.
-\item \code{edges}: Tibble of network edges with \code{from}, \code{to}, \code{correlation}, \code{p_value}, \code{padj}, \code{weight}, and \code{direction}.
-\item \code{r_cutoff}: Filtering cutoff for r.
-\item \code{p_cutoff}: Filtering cutoff for p.
-}
+A \code{tidybiome_network} object containing:
+\item{nodes}{Tibble of taxa, taxonomy, and node degree.}
+\item{edges}{Tibble of significant pairwise edges, correlation, and p-values.}
+\item{adjacency}{Filtered adjacency matrix.}
+\item{params}{List of parameter settings.}
 }
 \description{
 Evaluates pairwise co-occurrence correlations across taxa and constructs
-network nodes and edges filtered by correlation strength and statistical significance.
+a network representation including edge lists, node degree, and community structures.
+}
+\examples{
+data(gut_microbiome)
+net <- calc_network(gut_microbiome, min_prevalence = 0.5, r_cutoff = 0.3)
+print(net)
 }

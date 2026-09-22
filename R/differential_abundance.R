@@ -209,89 +209,86 @@ run_linda_engine <- function(counts, pred_df, target_var, covariate_vars, is_con
   rel_mat <- calc_relabundance_matrix(counts)
   log_prop <- log2(rel_mat + pseudocount / colSums(counts))
   n_taxa <- nrow(counts)
-  log2fc <- numeric(n_taxa)
-  pvals  <- numeric(n_taxa)
 
-  f_str <- paste("y ~", paste(c(target_var, covariate_vars), collapse = " + "))
-  fit_formula <- stats::as.formula(f_str)
-  fits <- vector("list", n_taxa)
+  f_str <- paste("~", paste(c(target_var, covariate_vars), collapse = " + "))
+  X <- stats::model.matrix(stats::as.formula(f_str), data = pred_df)
+  qr_X <- qr(X)
 
-  for (i in seq_len(n_taxa)) {
-    pred_df$y <- log_prop[i, ]
-    fit <- tryCatch(stats::lm(fit_formula, data = pred_df), error = function(e) NULL)
-    fits[[i]] <- fit
-    if (!is.null(fit)) {
-      coefs <- summary(fit)$coefficients
-      pattern <- paste0("^", target_var)
-      target_idx <- grep(pattern, rownames(coefs))
-      if (length(target_idx) >= 1) {
-        log2fc[i] <- coefs[target_idx[1], 1]
-        pvals[i]  <- coefs[target_idx[1], 4]
-      } else {
-        pvals[i] <- 1
-      }
-    } else {
-      pvals[i] <- 1
-    }
+  pattern <- paste0("^", target_var)
+  target_idx <- grep(pattern, colnames(X))
+
+  if (length(target_idx) == 0) {
+    return(list(log2fc = numeric(n_taxa), pvalue = rep(1, n_taxa)))
   }
+
+  # Matrix linear model across all taxa simultaneously
+  Y <- t(log_prop)
+  beta <- qr.coef(qr_X, Y)
+  resids <- qr.resid(qr_X, Y)
+  df_res <- nrow(X) - ncol(X)
+  res_var <- colSums(resids^2) / df_res
+  inv_XtX <- chol2inv(qr_X$qr)
+
+  se <- sqrt(inv_XtX[target_idx[1], target_idx[1]] * res_var)
+  log2fc <- beta[target_idx[1], ]
 
   # Mode/median compositional bias correction
   bias_estimate <- stats::median(log2fc, na.rm = TRUE)
   log2fc_corrected <- log2fc - bias_estimate
 
-  # Re-compute p-values with corrected effect size
-  for (i in seq_len(n_taxa)) {
-    fit <- fits[[i]]
-    if (!is.null(fit)) {
-      coefs <- summary(fit)$coefficients
-      pattern <- paste0("^", target_var)
-      target_idx <- grep(pattern, rownames(coefs))
-      if (length(target_idx) >= 1) {
-        se <- coefs[target_idx[1], 2]
-        if (!is.na(se) && se > 0) {
-          t_val <- log2fc_corrected[i] / se
-          pvals[i] <- 2 * stats::pt(-abs(t_val), df = fit$df.residual)
-        }
-      }
-    }
-  }
+  t_val <- log2fc_corrected / se
+  pvals <- 2 * stats::pt(-abs(t_val), df = df_res)
+  pvals[is.na(pvals)] <- 1
 
-  list(log2fc = log2fc_corrected, pvalue = pvals)
+  list(log2fc = as.numeric(log2fc_corrected), pvalue = as.numeric(pvals))
 }
 
 run_clr_linear_engine <- function(counts, pred_df, target_var, covariate_vars, is_continuous, pseudocount = 0.5) {
   clr_mat <- calc_clr_matrix(counts, pseudocount = pseudocount)
   n_taxa <- nrow(counts)
-  log2fc <- numeric(n_taxa)
-  pvals  <- numeric(n_taxa)
 
-  f_str <- paste("y ~", paste(c(target_var, covariate_vars), collapse = " + "))
-  fit_formula <- stats::as.formula(f_str)
+  f_str <- paste("~", paste(c(target_var, covariate_vars), collapse = " + "))
+  X <- stats::model.matrix(stats::as.formula(f_str), data = pred_df)
+  qr_X <- qr(X)
 
-  for (i in seq_len(n_taxa)) {
-    pred_df$y <- clr_mat[i, ]
-    fit <- tryCatch(stats::lm(fit_formula, data = pred_df), error = function(e) NULL)
-    if (!is.null(fit)) {
-      coefs <- summary(fit)$coefficients
-      pattern <- paste0("^", target_var)
-      target_idx <- grep(pattern, rownames(coefs))
-      if (length(target_idx) == 1) {
-        log2fc[i] <- coefs[target_idx, 1] / log(2)
-        pvals[i]  <- coefs[target_idx, 4]
-      } else if (length(target_idx) > 1) {
-        log2fc[i] <- coefs[target_idx[which.max(abs(coefs[target_idx, 1]))], 1] / log(2)
-        drop_res <- tryCatch(stats::drop1(fit, scope = stats::as.formula(paste("~", target_var)), test = "F"), error = function(e) NULL)
-        pvals[i] <- if (!is.null(drop_res) && "Pr(>F)" %in% colnames(drop_res)) drop_res$`Pr(>F)`[2] else coefs[target_idx[1], 4]
-      } else {
-        log2fc[i] <- 0
-        pvals[i] <- 1
-      }
-    } else {
-      log2fc[i] <- 0
-      pvals[i] <- 1
-    }
+  pattern <- paste0("^", target_var)
+  target_idx <- grep(pattern, colnames(X))
+
+  if (length(target_idx) == 0) {
+    return(list(log2fc = numeric(n_taxa), pvalue = rep(1, n_taxa)))
   }
-  list(log2fc = log2fc, pvalue = pvals)
+
+  Y <- t(clr_mat)
+  beta <- qr.coef(qr_X, Y)
+  resids <- qr.resid(qr_X, Y)
+  df_res <- nrow(X) - ncol(X)
+  res_var <- colSums(resids^2) / df_res
+  inv_XtX <- chol2inv(qr_X$qr)
+
+  if (length(target_idx) == 1) {
+    se <- sqrt(inv_XtX[target_idx, target_idx] * res_var)
+    t_val <- beta[target_idx, ] / se
+    log2fc <- beta[target_idx, ] / log(2)
+    pvals <- 2 * stats::pt(-abs(t_val), df = df_res)
+  } else {
+    coef_sub <- beta[target_idx, , drop = FALSE]
+    max_idx <- apply(abs(coef_sub), 2, which.max)
+    log2fc <- vapply(seq_len(n_taxa), function(i) coef_sub[max_idx[i], i], numeric(1)) / log(2)
+
+    red_vars <- covariate_vars
+    f_red_str <- if (length(red_vars) > 0) paste("~", paste(red_vars, collapse = " + ")) else "~ 1"
+    X_red <- stats::model.matrix(stats::as.formula(f_red_str), data = pred_df)
+    qr_red <- qr(X_red)
+
+    rss_full <- colSums(resids^2)
+    rss_red  <- colSums(qr.resid(qr_red, Y)^2)
+    df_diff  <- ncol(X) - ncol(X_red)
+    f_stat   <- ((rss_red - rss_full) / df_diff) / (rss_full / df_res)
+    pvals    <- 1 - stats::pf(f_stat, df1 = df_diff, df2 = df_res)
+  }
+
+  pvals[is.na(pvals)] <- 1
+  list(log2fc = as.numeric(log2fc), pvalue = as.numeric(pvals))
 }
 
 run_wilcoxon_engine <- function(counts, pred_df, target_var, covariate_vars, is_continuous) {

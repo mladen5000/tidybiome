@@ -14,9 +14,14 @@ aggregate_taxa(tb, rank, na.rm = FALSE)
 \item{na.rm}{Logical. If \code{TRUE}, removes unassigned taxa. If \code{FALSE} (default), groups them as \code{"Unclassified"}.}
 }
 \value{
-A new \code{tidy_microbiome} object aggregated at the specified rank.
+An updated \code{tidy_microbiome} object aggregated at the specified rank.
 }
 \description{
 Agglomerates/merges features (ASVs/OTUs) by a specified taxonomic rank (e.g., Phylum, Family, Genus)
-by summing abundances across all assays.
+by summing abundances across all assays using compiled C-level primitives.
+}
+\examples{
+data(gut_microbiome)
+tb_phylum <- aggregate_taxa(gut_microbiome, rank = "Phylum")
+dim(assay(tb_phylum))
 }

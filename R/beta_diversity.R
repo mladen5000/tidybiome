@@ -149,39 +149,30 @@ calc_unifrac <- function(tb, weighted = FALSE, normalized = TRUE, assay = "count
   }
 
   edge_prop <- M %*% prop_ordered
-  d_mat <- matrix(0, nrow = n_samp, ncol = n_samp, dimnames = list(sample_names, sample_names))
 
   if (!weighted) {
-    edge_occ <- (edge_prop > 0) * 1
-    for (j in 1:(n_samp - 1)) {
-      occ_j <- edge_occ[, j]
-      for (k in (j + 1):n_samp) {
-        occ_k <- edge_occ[, k]
-        diff_edges <- abs(occ_j - occ_k)
-        union_edges <- pmax(occ_j, occ_k)
-        num <- sum(edge_lengths * diff_edges)
-        denom <- sum(edge_lengths * union_edges)
-        val <- if (denom > 0) num / denom else 0
-        d_mat[k, j] <- val
-        d_mat[j, k] <- val
-      }
-    }
+    occ_weighted <- (edge_prop > 0) * edge_lengths
+    num_dist <- stats::dist(t(occ_weighted), method = "manhattan")
+    S <- colSums(occ_weighted)
+    S_sum <- stats::as.dist(outer(S, S, "+"))
+    denom_dist <- (S_sum + num_dist) / 2
+    d_res <- num_dist / denom_dist
+    d_res[denom_dist == 0] <- 0
   } else {
-    for (j in 1:(n_samp - 1)) {
-      p_j <- edge_prop[, j]
-      for (k in (j + 1):n_samp) {
-        p_k <- edge_prop[, k]
-        diff_p <- abs(p_j - p_k)
-        num <- sum(edge_lengths * diff_p)
-        denom <- if (normalized) sum(edge_lengths * (p_j + p_k)) else 1
-        val <- if (denom > 0) num / denom else 0
-        d_mat[k, j] <- val
-        d_mat[j, k] <- val
-      }
+    prop_weighted <- edge_prop * edge_lengths
+    num_dist <- stats::dist(t(prop_weighted), method = "manhattan")
+    if (normalized) {
+      L <- colSums(prop_weighted)
+      L_sum <- stats::as.dist(outer(L, L, "+"))
+      d_res <- num_dist / L_sum
+      d_res[L_sum == 0] <- 0
+    } else {
+      d_res <- num_dist
     }
   }
 
-  stats::as.dist(d_mat)
+  attr(d_res, "Labels") <- sample_names
+  d_res
 }
 
 #' Extract Distance Matrix from tidy_microbiome

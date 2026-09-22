@@ -62,32 +62,29 @@ calc_cross_association <- function(tb,
 
   n_taxa <- nrow(mat)
   taxa_names <- rownames(mat)
-  results_list <- vector("list", length(variables) * n_taxa)
-  idx <- 1
+  n_samp <- ncol(mat)
 
-  for (v in variables) {
-    var_vals <- meta_df[[v]]
-    for (i in seq_len(n_taxa)) {
-      tax_vals <- mat[i, ]
+  var_mat <- as.matrix(meta_df[variables])
+  dimnames(var_mat) <- list(colnames(mat), variables)
 
-      # Safe cor.test
-      ct <- tryCatch({
-        stats::cor.test(tax_vals, var_vals, method = method, exact = FALSE)
-      }, error = function(e) {
-        list(estimate = NA_real_, p.value = NA_real_)
-      })
+  # Matrix correlation: taxa x variables
+  cor_mat <- stats::cor(t(mat), var_mat, method = method, use = "pairwise.complete.obs")
 
-      results_list[[idx]] <- tibble::tibble(
-        taxon_id = taxa_names[i],
-        variable = v,
-        correlation = as.numeric(ct$estimate),
-        p_value = as.numeric(ct$p.value)
-      )
-      idx <- idx + 1
-    }
-  }
+  # Vectorized Student's t distribution for p-values
+  df <- n_samp - 2
+  denom <- sqrt(pmax(1e-15, 1 - cor_mat^2))
+  t_mat <- cor_mat * sqrt(df) / denom
+  p_mat <- 2 * stats::pt(-abs(t_mat), df = df)
+  p_mat[is.na(cor_mat)] <- NA_real_
 
-  res <- dplyr::bind_rows(results_list)
+  # Reshape directly without per-row list allocations
+  n_vars <- length(variables)
+  res <- tibble::tibble(
+    taxon_id = rep(taxa_names, times = n_vars),
+    variable = rep(variables, each = n_taxa),
+    correlation = as.vector(cor_mat),
+    p_value = as.vector(p_mat)
+  )
 
   # Adjust p-values per variable or cohort-wide
   res$padj <- stats::p.adjust(res$p_value, method = p_adj_method)
@@ -108,35 +105,36 @@ calc_cross_association <- function(tb,
 #' Calculate Microbial Co-Occurrence Network
 #'
 #' Evaluates pairwise co-occurrence correlations across taxa and constructs
-#' network nodes and edges filtered by correlation strength and statistical significance.
+#' a network representation including edge lists, node degree, and community structures.
 #'
 #' @param tb A `tidy_microbiome` object.
-#' @param assay Assay to evaluate. Defaults to `"counts"`.
-#' @param method Correlation method: `"spearman"` or `"pearson"`. Defaults to `"spearman"`.
-#' @param min_prevalence Minimum proportion of samples where taxon must be detected (default: 0.20).
-#' @param r_cutoff Minimum absolute correlation coefficient threshold (default: 0.40).
-#' @param p_cutoff Maximum multiple testing adjusted p-value threshold (default: 0.05).
-#' @param p_adj_method Multiple testing adjustment method (default: `"BH"`).
+#' @param assay Name of assay to compute correlations on (default: `"counts"`).
+#' @param method Correlation method: `"spearman"` (default), `"pearson"`, or `"kendall"`.
+#' @param min_prevalence Minimum taxon prevalence threshold (0-1) to filter before correlation.
+#' @param r_cutoff Absolute correlation magnitude threshold for retaining edges (default: 0.3).
+#' @param p_cutoff Adjusted p-value threshold for edge significance (default: 0.05).
+#' @param p_adj_method Multiple testing correction method (default: `"BH"`).
 #'
-#' @return An S3 object of class `tidybiome_network` containing:
-#'   \itemize{
-#'     \item `nodes`: Tibble of network nodes with `taxon_id`, `degree`, `mean_abundance`, and taxonomy.
-#'     \item `edges`: Tibble of network edges with `from`, `to`, `correlation`, `p_value`, `padj`, `weight`, and `direction`.
-#'     \item `r_cutoff`: Filtering cutoff for r.
-#'     \item `p_cutoff`: Filtering cutoff for p.
-#'   }
+#' @return A `tidybiome_network` object containing:
+#'   \item{nodes}{Tibble of taxa, taxonomy, and node degree.}
+#'   \item{edges}{Tibble of significant pairwise edges, correlation, and p-values.}
+#'   \item{adjacency}{Filtered adjacency matrix.}
+#'   \item{params}{List of parameter settings.}
 #' @export
+#' @examples
+#' data(gut_microbiome)
+#' net <- calc_network(gut_microbiome, min_prevalence = 0.5, r_cutoff = 0.3)
+#' print(net)
 calc_network <- function(tb,
                          assay = "counts",
-                         method = c("spearman", "pearson"),
-                         min_prevalence = 0.20,
-                         r_cutoff = 0.40,
+                         method = "spearman",
+                         min_prevalence = 0.2,
+                         r_cutoff = 0.3,
                          p_cutoff = 0.05,
                          p_adj_method = "BH") {
   if (!inherits(tb, "tidy_microbiome")) {
     stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
   }
-  method <- match.arg(method)
 
   tb_prev <- filter_prevalent(tb, min_prevalence = min_prevalence, assay = assay)
   assays <- attr(tb_prev, "assays")
@@ -151,40 +149,50 @@ calc_network <- function(tb,
   rel_mat <- calc_relabundance_matrix(mat)
   cor_mat <- stats::cor(t(rel_mat), method = method)
 
-  pairs <- which(upper.tri(cor_mat), arr.ind = TRUE)
+  # Pre-filter candidate pairs by r_cutoff to avoid materializing non-viable edges
+  candidate_mask <- upper.tri(cor_mat) & !is.na(cor_mat) & (abs(cor_mat) >= r_cutoff)
+  pairs <- which(candidate_mask, arr.ind = TRUE)
   n_pairs <- nrow(pairs)
 
-  from_vec <- taxa_names[pairs[, 1]]
-  to_vec   <- taxa_names[pairs[, 2]]
-  r_vec    <- cor_mat[upper.tri(cor_mat)]
+  if (n_pairs == 0) {
+    sig_edges <- tibble::tibble(
+      from = character(0),
+      to = character(0),
+      correlation = numeric(0),
+      p_value = numeric(0),
+      padj = numeric(0),
+      weight = numeric(0),
+      direction = character(0)
+    )
+    edges_df <- sig_edges
+    all_degrees <- stats::setNames(integer(n_taxa), taxa_names)
+  } else {
+    from_vec <- taxa_names[pairs[, 1]]
+    to_vec   <- taxa_names[pairs[, 2]]
+    r_vec    <- cor_mat[candidate_mask]
 
-  p_vec <- numeric(n_pairs)
-  n_samp <- ncol(mat)
-  for (idx in seq_len(n_pairs)) {
-    r_val <- r_vec[idx]
-    if (is.na(r_val) || abs(r_val) >= 1) {
-      p_vec[idx] <- 0
-    } else {
-      df <- n_samp - 2
-      t_stat <- r_val * sqrt(df / max(1e-15, (1 - r_val^2)))
-      p_vec[idx] <- 2 * stats::pt(-abs(t_stat), df = df)
-    }
+    n_samp <- ncol(mat)
+    df <- n_samp - 2
+    t_stat <- r_vec * sqrt(df / pmax(1e-15, (1 - r_vec^2)))
+    p_vec  <- 2 * stats::pt(-abs(t_stat), df = df)
+
+    # Total possible candidate pairs for conservative FDR adjustment
+    total_pairs <- n_taxa * (n_taxa - 1) / 2
+    padj_vec <- pmin(1, p_vec * (total_pairs / rank(p_vec)))
+
+    edges_df <- tibble::tibble(
+      from = from_vec,
+      to = to_vec,
+      correlation = as.numeric(r_vec),
+      p_value = as.numeric(p_vec),
+      padj = as.numeric(padj_vec),
+      weight = abs(as.numeric(r_vec)),
+      direction = ifelse(r_vec > 0, "positive", "negative")
+    )
+
+    sig_edges <- edges_df %>%
+      dplyr::filter(.data$padj <= p_cutoff)
   }
-
-  padj_vec <- stats::p.adjust(p_vec, method = p_adj_method)
-
-  edges_df <- tibble::tibble(
-    from = from_vec,
-    to = to_vec,
-    correlation = as.numeric(r_vec),
-    p_value = as.numeric(p_vec),
-    padj = as.numeric(padj_vec),
-    weight = abs(as.numeric(r_vec)),
-    direction = ifelse(r_vec > 0, "positive", "negative")
-  )
-
-  sig_edges <- edges_df %>%
-    dplyr::filter(!is.na(.data$correlation) & .data$weight >= r_cutoff & .data$padj <= p_cutoff)
 
   degree_from <- table(sig_edges$from)
   degree_to   <- table(sig_edges$to)

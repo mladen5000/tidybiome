@@ -143,19 +143,24 @@ calc_hellinger_matrix <- function(mat) {
 calc_gmpr_size_factors <- function(mat, min_overlap = 2) {
   n_samp <- ncol(mat)
   r_matrix <- matrix(NA_real_, nrow = n_samp, ncol = n_samp)
+  diag(r_matrix) <- 1
 
-  for (i in seq_len(n_samp)) {
-    x_i <- mat[, i]
-    pos_i <- x_i > 0
-    for (j in seq_len(n_samp)) {
-      if (i == j) {
-        r_matrix[i, j] <- 1
-        next
-      }
-      x_j <- mat[, j]
-      shared <- pos_i & (x_j > 0)
+  # Precompute positive indicator and log values
+  pos_mat <- mat > 0
+  log_mat <- mat
+  log_mat[pos_mat] <- log(mat[pos_mat])
+  log_mat[!pos_mat] <- 0
+
+  # Compute only upper triangle (j > i) and reuse symmetry: r_ji = 1 / r_ij
+  for (i in seq_len(n_samp - 1)) {
+    pos_i <- pos_mat[, i]
+    log_i <- log_mat[, i]
+    for (j in (i + 1):n_samp) {
+      shared <- pos_i & pos_mat[, j]
       if (sum(shared) >= min_overlap) {
-        r_matrix[i, j] <- exp(mean(log(x_i[shared]) - log(x_j[shared])))
+        val <- exp(mean(log_i[shared] - log_mat[shared, j]))
+        r_matrix[i, j] <- val
+        r_matrix[j, i] <- 1 / val
       }
     }
   }

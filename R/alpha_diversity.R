@@ -112,27 +112,49 @@ calc_alpha_diversity <- function(tb,
 }
 
 calc_faith_pd <- function(mat, tree) {
-  # Simple vectorized Faith's PD
   n_samp <- ncol(mat)
-  pd_vals <- numeric(n_samp)
-  taxa_names <- rownames(mat)
+  common_taxa <- intersect(rownames(mat), tree$tip.label)
 
-  for (j in seq_len(n_samp)) {
-    present_taxa <- taxa_names[mat[, j] > 0]
-    if (length(present_taxa) <= 1) {
-      pd_vals[j] <- 0
-    } else {
-      # Keep tips present in tree
-      common_tips <- intersect(present_taxa, tree$tip.label)
-      if (length(common_tips) <= 1) {
-        pd_vals[j] <- 0
-      } else if (requireNamespace("ape", quietly = TRUE)) {
-        sub_tree <- ape::keep.tip(tree, common_tips)
-        pd_vals[j] <- sum(sub_tree$edge.length, na.rm = TRUE)
-      } else {
-        pd_vals[j] <- length(common_tips)
-      }
+  if (length(common_taxa) <= 1 || !requireNamespace("ape", quietly = TRUE)) {
+    return(numeric(n_samp))
+  }
+
+  tree_sub <- ape::keep.tip(tree, common_taxa)
+  mat_sub <- mat[tree_sub$tip.label, , drop = FALSE]
+
+  n_edge <- nrow(tree_sub$edge)
+  n_tip <- length(tree_sub$tip.label)
+  edge_lengths <- tree_sub$edge.length
+  edge_lengths[is.na(edge_lengths)] <- 0
+  parent <- tree_sub$edge[, 1]
+  child  <- tree_sub$edge[, 2]
+
+  tip_to_edge <- vector("list", n_tip)
+  for (e_idx in seq_len(n_edge)) {
+    c_node <- child[e_idx]
+    if (c_node <= n_tip) tip_to_edge[[c_node]] <- c(tip_to_edge[[c_node]], e_idx)
+  }
+  for (t_idx in seq_len(n_tip)) {
+    curr <- child[tip_to_edge[[t_idx]][1]]
+    repeat {
+      parent_edge <- which(child == parent[which(child == curr)[1]])
+      if (length(parent_edge) > 0) {
+        tip_to_edge[[t_idx]] <- c(tip_to_edge[[t_idx]], parent_edge)
+        curr <- child[parent_edge]
+      } else break
     }
   }
-  pd_vals
+
+  M <- matrix(0, nrow = n_edge, ncol = n_tip)
+  for (t_idx in seq_len(n_tip)) M[tip_to_edge[[t_idx]], t_idx] <- 1
+
+  # Active edges across all samples simultaneously
+  edge_occ_counts <- M %*% (mat_sub > 0)
+  pd_vals <- colSums(edge_lengths * (edge_occ_counts > 0))
+
+  # Samples with <= 1 taxon have 0 PD
+  n_present <- colSums(mat_sub > 0)
+  pd_vals[n_present <= 1] <- 0
+
+  as.numeric(pd_vals)
 }

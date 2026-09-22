@@ -32,4 +32,15 @@ test_that("all plotting functions return valid ggplot2 objects", {
   da_df <- calc_differential_abundance(tb, group = "group")
   p_volc <- plot_da_volcano(da_df)
   expect_s3_class(p_volc, "ggplot")
+
+  # plot_dbrda
+  dbrda_res <- run_dbrda(tb, ~ group, distance = "bray")
+  p_dbrda <- plot_dbrda(dbrda_res, color = "group")
+  expect_s3_class(p_dbrda, "ggplot")
+
+  # plot_network
+  net <- calc_network(tb, min_prevalence = 0.2, r_cutoff = 0.2, p_cutoff = 1.0)
+  p_net <- plot_network(net)
+  expect_s3_class(p_net, "ggplot")
 })
+

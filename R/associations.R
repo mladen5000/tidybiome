@@ -104,3 +104,130 @@ calc_cross_association <- function(tb,
 
   res
 }
+
+#' Calculate Microbial Co-Occurrence Network
+#'
+#' Evaluates pairwise co-occurrence correlations across taxa and constructs
+#' network nodes and edges filtered by correlation strength and statistical significance.
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @param assay Assay to evaluate. Defaults to `"counts"`.
+#' @param method Correlation method: `"spearman"` or `"pearson"`. Defaults to `"spearman"`.
+#' @param min_prevalence Minimum proportion of samples where taxon must be detected (default: 0.20).
+#' @param r_cutoff Minimum absolute correlation coefficient threshold (default: 0.40).
+#' @param p_cutoff Maximum multiple testing adjusted p-value threshold (default: 0.05).
+#' @param p_adj_method Multiple testing adjustment method (default: `"BH"`).
+#'
+#' @return An S3 object of class `tidybiome_network` containing:
+#'   \itemize{
+#'     \item `nodes`: Tibble of network nodes with `taxon_id`, `degree`, `mean_abundance`, and taxonomy.
+#'     \item `edges`: Tibble of network edges with `from`, `to`, `correlation`, `p_value`, `padj`, `weight`, and `direction`.
+#'     \item `r_cutoff`: Filtering cutoff for r.
+#'     \item `p_cutoff`: Filtering cutoff for p.
+#'   }
+#' @export
+calc_network <- function(tb,
+                         assay = "counts",
+                         method = c("spearman", "pearson"),
+                         min_prevalence = 0.20,
+                         r_cutoff = 0.40,
+                         p_cutoff = 0.05,
+                         p_adj_method = "BH") {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  method <- match.arg(method)
+
+  tb_prev <- filter_prevalent(tb, min_prevalence = min_prevalence, assay = assay)
+  assays <- attr(tb_prev, "assays")
+  mat <- assays[[assay]]
+  n_taxa <- nrow(mat)
+  taxa_names <- rownames(mat)
+
+  if (n_taxa < 2) {
+    stop("Fewer than 2 taxa passed the prevalence threshold for network construction.", call. = FALSE)
+  }
+
+  rel_mat <- calc_relabundance_matrix(mat)
+  cor_mat <- stats::cor(t(rel_mat), method = method)
+
+  pairs <- which(upper.tri(cor_mat), arr.ind = TRUE)
+  n_pairs <- nrow(pairs)
+
+  from_vec <- taxa_names[pairs[, 1]]
+  to_vec   <- taxa_names[pairs[, 2]]
+  r_vec    <- cor_mat[upper.tri(cor_mat)]
+
+  p_vec <- numeric(n_pairs)
+  n_samp <- ncol(mat)
+  for (idx in seq_len(n_pairs)) {
+    r_val <- r_vec[idx]
+    if (is.na(r_val) || abs(r_val) >= 1) {
+      p_vec[idx] <- 0
+    } else {
+      df <- n_samp - 2
+      t_stat <- r_val * sqrt(df / max(1e-15, (1 - r_val^2)))
+      p_vec[idx] <- 2 * stats::pt(-abs(t_stat), df = df)
+    }
+  }
+
+  padj_vec <- stats::p.adjust(p_vec, method = p_adj_method)
+
+  edges_df <- tibble::tibble(
+    from = from_vec,
+    to = to_vec,
+    correlation = as.numeric(r_vec),
+    p_value = as.numeric(p_vec),
+    padj = as.numeric(padj_vec),
+    weight = abs(as.numeric(r_vec)),
+    direction = ifelse(r_vec > 0, "positive", "negative")
+  )
+
+  sig_edges <- edges_df %>%
+    dplyr::filter(!is.na(.data$correlation) & .data$weight >= r_cutoff & .data$padj <= p_cutoff)
+
+  degree_from <- table(sig_edges$from)
+  degree_to   <- table(sig_edges$to)
+  all_degrees <- stats::setNames(integer(n_taxa), taxa_names)
+
+  if (length(degree_from) > 0) {
+    all_degrees[names(degree_from)] <- all_degrees[names(degree_from)] + as.integer(degree_from)
+  }
+  if (length(degree_to) > 0) {
+    all_degrees[names(degree_to)] <- all_degrees[names(degree_to)] + as.integer(degree_to)
+  }
+
+  nodes_df <- tibble::tibble(
+    taxon_id = taxa_names,
+    degree = as.integer(all_degrees[taxa_names]),
+    mean_abundance = as.numeric(rowMeans(rel_mat))
+  )
+
+  tax_df <- attr(tb_prev, "tax_table")
+  if (!is.null(tax_df)) {
+    nodes_df <- dplyr::left_join(nodes_df, tax_df, by = "taxon_id")
+  }
+
+  res <- list(
+    nodes = nodes_df,
+    edges = sig_edges,
+    all_edges = edges_df,
+    r_cutoff = r_cutoff,
+    p_cutoff = p_cutoff
+  )
+  class(res) <- c("tidybiome_network", "list")
+  res
+}
+
+#' @export
+print.tidybiome_network <- function(x, ...) {
+  cat("── tidybiome_network (Microbial Co-Occurrence Network) ──\n")
+  cat(sprintf("  • Nodes (Taxa): %d\n", nrow(x$nodes)))
+  cat(sprintf("  • Significant edges: %d (|r| >= %.2f, padj <= %.2f)\n",
+              nrow(x$edges), x$r_cutoff, x$p_cutoff))
+  pos_n <- sum(x$edges$direction == "positive")
+  neg_n <- sum(x$edges$direction == "negative")
+  cat(sprintf("  • Positive: %d, Negative: %d\n", pos_n, neg_n))
+  invisible(x)
+}
+

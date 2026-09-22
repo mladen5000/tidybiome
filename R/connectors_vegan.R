@@ -213,3 +213,118 @@ run_nmds <- function(tb, assay = "counts", method = "bray", k = 2, trymax = 50, 
 
   out
 }
+
+#' Distance-Based Redundancy Analysis via vegan::dbrda
+#'
+#' Performs constrained ordination (db-RDA) to model microbial community variation
+#' explained by environmental predictors or experimental conditions.
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @param formula A model formula specifying predictors from sample metadata (e.g. `~ treatment + age`).
+#' @param assay Assay name to use. Defaults to `"counts"`.
+#' @param distance Distance metric to compute (e.g. `"bray"`, `"raitchison"`). Defaults to `"bray"`.
+#' @param ... Additional arguments passed to `vegan::dbrda`.
+#' @return An S3 object of class `tidybiome_dbrda` containing:
+#'   \itemize{
+#'     \item `samples`: Tibble of sample coordinates along db-RDA axes joined with metadata.
+#'     \item `biplot`: Tibble of constraint vector loadings (continuous predictors).
+#'     \item `centroids`: Tibble of factor centroids (categorical predictors).
+#'     \item `variance_explained`: Proportion of variance explained by constrained axes.
+#'     \item `model`: The underlying `vegan::dbrda` model object.
+#'   }
+#' @export
+run_dbrda <- function(tb, formula, assay = "counts", distance = "bray", ...) {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  if (!requireNamespace("vegan", quietly = TRUE)) {
+    stop("Package 'vegan' is required for `run_dbrda()`. Please install it.", call. = FALSE)
+  }
+
+  veg <- to_vegan(tb, assay = assay)
+  comm <- veg$comm
+  env <- as.data.frame(veg$env)
+  rownames(env) <- env$sample_id
+
+  # Left hand side of formula references the community matrix
+  f_char <- deparse(formula)
+  if (startsWith(f_char, "~")) {
+    formula <- stats::as.formula(paste("comm", f_char))
+  }
+
+  mod <- vegan::dbrda(
+    formula = formula,
+    data = env,
+    distance = distance,
+    ...
+  )
+
+  # Variance explained
+  eig_constrained <- mod$CCA$eig
+  total_inertia <- mod$tot.chi
+  var_exp <- if (!is.null(eig_constrained) && total_inertia > 0) {
+    eig_constrained / total_inertia
+  } else {
+    numeric(0)
+  }
+  names(var_exp) <- paste0("dbRDA", seq_along(var_exp))
+
+  # Sample coordinates (sites in CCA space)
+  site_scores <- tryCatch(as.data.frame(vegan::scores(mod, display = "sites", choices = seq_along(eig_constrained))), error = function(e) NULL)
+  if (is.null(site_scores) || ncol(site_scores) == 0) {
+    site_scores <- as.data.frame(mod$CCA$u %*% diag(sqrt(pmax(0, mod$CCA$eig))))
+  }
+  colnames(site_scores) <- paste0("dbRDA", seq_len(ncol(site_scores)))
+  site_scores$sample_id <- rownames(comm)
+
+  samples_df <- dplyr::left_join(site_scores, tibble::as_tibble(tb), by = "sample_id")
+  samples_df <- tibble::as_tibble(samples_df)
+
+  # Biplot vectors for continuous terms
+  biplot_scores <- tryCatch({
+    bp <- as.data.frame(vegan::scores(mod, display = "bp"))
+    if (!is.null(bp) && nrow(bp) > 0) {
+      bp$term <- rownames(bp)
+      colnames(bp)[seq_along(eig_constrained)] <- paste0("dbRDA", seq_along(eig_constrained))
+      tibble::as_tibble(bp)
+    } else {
+      tibble::tibble()
+    }
+  }, error = function(e) tibble::tibble())
+
+  # Centroids for categorical terms
+  centroids_scores <- tryCatch({
+    cnt <- as.data.frame(vegan::scores(mod, display = "cn"))
+    if (!is.null(cnt) && nrow(cnt) > 0) {
+      cnt$term <- rownames(cnt)
+      colnames(cnt)[seq_along(eig_constrained)] <- paste0("dbRDA", seq_along(eig_constrained))
+      tibble::as_tibble(cnt)
+    } else {
+      tibble::tibble()
+    }
+  }, error = function(e) tibble::tibble())
+
+  res <- list(
+    samples = samples_df,
+    biplot = biplot_scores,
+    centroids = centroids_scores,
+    variance_explained = var_exp,
+    model = mod
+  )
+  class(res) <- c("tidybiome_dbrda", "list")
+  res
+}
+
+#' @export
+print.tidybiome_dbrda <- function(x, ...) {
+  n_ax <- length(x$variance_explained)
+  cat("── tidybiome_dbrda (Distance-Based Redundancy Analysis) ──\n")
+  cat(sprintf("  • Constrained axes: %d\n", n_ax))
+  if (n_ax >= 2) {
+    cat(sprintf("  • Inertia explained: dbRDA1 = %.2f%%, dbRDA2 = %.2f%%\n",
+                x$variance_explained[1] * 100, x$variance_explained[2] * 100))
+  }
+  cat(sprintf("  • Samples: %d\n", nrow(x$samples)))
+  invisible(x)
+}
+

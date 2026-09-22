@@ -373,6 +373,138 @@ plot_core <- function(core_res) {
     theme_tidybiome()
 }
 
+#' Plot Distance-Based Redundancy Analysis (db-RDA) Biplot
+#'
+#' @param dbrda_res An object produced by [run_dbrda()].
+#' @param color Optional metadata variable to color sample points.
+#' @param shape Optional metadata variable for point shapes.
+#' @param palette Palette name: `"tidybiome"` or `"nature"`.
+#'
+#' @return A `ggplot2::ggplot` object.
+#' @export
+plot_dbrda <- function(dbrda_res, color = NULL, shape = NULL, palette = "tidybiome") {
+  if (!inherits(dbrda_res, "tidybiome_dbrda")) {
+    stop("`dbrda_res` must be an object produced by `run_dbrda()`.", call. = FALSE)
+  }
+  samples_df <- dbrda_res$samples
+  var_exp <- dbrda_res$variance_explained
+
+  x_lab <- if (length(var_exp) >= 1) paste0("dbRDA1 (", round(var_exp[1] * 100, 1), "%)") else "dbRDA1"
+  y_lab <- if (length(var_exp) >= 2) paste0("dbRDA2 (", round(var_exp[2] * 100, 1), "%)") else "dbRDA2"
+
+  aes_args <- list(x = rlang::sym("dbRDA1"), y = rlang::sym("dbRDA2"))
+  if (!is.null(color) && color %in% colnames(samples_df)) {
+    aes_args$color <- rlang::sym(color)
+  }
+  if (!is.null(shape) && shape %in% colnames(samples_df)) {
+    aes_args$shape <- rlang::sym(shape)
+  }
+
+  p <- ggplot2::ggplot(samples_df, do.call(ggplot2::aes, aes_args)) +
+    ggplot2::geom_point(size = 3.5, alpha = 0.85) +
+    scale_color_tidybiome(palette = palette) +
+    ggplot2::labs(
+      title = "Constrained Ordination - db-RDA",
+      x = x_lab,
+      y = y_lab
+    ) +
+    theme_tidybiome()
+
+  # Biplot vectors
+  biplot_df <- dbrda_res$biplot
+  if (nrow(biplot_df) > 0 && all(c("dbRDA1", "dbRDA2") %in% colnames(biplot_df))) {
+    x_range <- range(samples_df$dbRDA1, na.rm = TRUE)
+    y_range <- range(samples_df$dbRDA2, na.rm = TRUE)
+    sf <- 0.7 * min(diff(x_range) / max(1e-6, max(abs(biplot_df$dbRDA1))),
+                    diff(y_range) / max(1e-6, max(abs(biplot_df$dbRDA2))))
+
+    biplot_df$x_end <- biplot_df$dbRDA1 * sf
+    biplot_df$y_end <- biplot_df$dbRDA2 * sf
+
+    p <- p +
+      ggplot2::geom_segment(data = biplot_df,
+                            ggplot2::aes(x = 0, y = 0, xend = .data$x_end, yend = .data$y_end),
+                            arrow = ggplot2::arrow(length = ggplot2::unit(0.2, "cm")),
+                            color = "#2b2d42", linewidth = 0.8, inherit.aes = FALSE) +
+      ggplot2::geom_text(data = biplot_df,
+                         ggplot2::aes(x = .data$x_end * 1.15, y = .data$y_end * 1.15, label = .data$term),
+                         color = "#2b2d42", fontface = "bold", size = 3.5, inherit.aes = FALSE)
+  }
+  p
+}
+
+#' Plot Microbial Co-Occurrence Network
+#'
+#' @param net An object produced by [calc_network()].
+#' @param color_by Taxonomy column to color nodes by (e.g. `"Phylum"`). Defaults to `"Phylum"`.
+#' @param min_degree Minimum degree for a node to be displayed (default: 1).
+#' @param palette Palette name: `"tidybiome"` or `"nature"`.
+#'
+#' @return A `ggplot2::ggplot` object.
+#' @export
+plot_network <- function(net, color_by = "Phylum", min_degree = 1, palette = "tidybiome") {
+  if (!inherits(net, "tidybiome_network")) {
+    stop("`net` must be an object produced by `calc_network()`.", call. = FALSE)
+  }
+  nodes <- net$nodes
+  edges <- net$edges
+
+  nodes_sub <- nodes[nodes$degree >= min_degree, ]
+  if (nrow(nodes_sub) == 0) {
+    nodes_sub <- nodes
+  }
+
+  n_nodes <- nrow(nodes_sub)
+  theta <- seq(0, 2 * pi, length.out = n_nodes + 1)[seq_len(n_nodes)]
+  nodes_sub$x <- cos(theta)
+  nodes_sub$y <- sin(theta)
+
+  coord_map_x <- stats::setNames(nodes_sub$x, nodes_sub$taxon_id)
+  coord_map_y <- stats::setNames(nodes_sub$y, nodes_sub$taxon_id)
+
+  edges_sub <- edges[edges$from %in% nodes_sub$taxon_id & edges$to %in% nodes_sub$taxon_id, ]
+  edges_sub$x_start <- coord_map_x[edges_sub$from]
+  edges_sub$y_start <- coord_map_y[edges_sub$from]
+  edges_sub$x_end   <- coord_map_x[edges_sub$to]
+  edges_sub$y_end   <- coord_map_y[edges_sub$to]
+
+  color_col <- if (!is.null(color_by) && color_by %in% colnames(nodes_sub)) color_by else "taxon_id"
+
+  p <- ggplot2::ggplot()
+
+  if (nrow(edges_sub) > 0) {
+    p <- p + ggplot2::geom_segment(
+      data = edges_sub,
+      ggplot2::aes(x = .data$x_start, y = .data$y_start, xend = .data$x_end, yend = .data$y_end,
+                   color = .data$direction, linewidth = .data$weight),
+      alpha = 0.5
+    ) +
+    ggplot2::scale_color_manual(values = c(positive = "#0072B2", negative = "#D55E00"), name = "Association") +
+    ggplot2::scale_linewidth_continuous(range = c(0.4, 1.5), guide = "none")
+  }
+
+  label_var <- if ("Genus" %in% colnames(nodes_sub)) "Genus" else "taxon_id"
+  nodes_sub$Label <- ifelse(is.na(nodes_sub[[label_var]]), nodes_sub$taxon_id, as.character(nodes_sub[[label_var]]))
+
+  p <- p +
+    ggplot2::geom_point(
+      data = nodes_sub,
+      ggplot2::aes(x = .data$x, y = .data$y, size = .data$mean_abundance, fill = .data[[color_col]]),
+      shape = 21, color = "white", stroke = 1
+    ) +
+    ggplot2::geom_text(
+      data = nodes_sub,
+      ggplot2::aes(x = .data$x * 1.15, y = .data$y * 1.15, label = .data$Label),
+      size = 3.0, fontface = "bold"
+    ) +
+    ggplot2::scale_size_continuous(range = c(3, 8), name = "Abundance") +
+    ggplot2::labs(title = "Microbial Co-Occurrence Network") +
+    ggplot2::theme_void() +
+    ggplot2::theme(plot.title = ggplot2::element_text(face = "bold", size = 14, hjust = 0.5))
+
+  p
+}
+
 metric_display_name <- function(metric) {
   switch(
     metric,

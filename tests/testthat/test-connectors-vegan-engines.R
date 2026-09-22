@@ -35,3 +35,16 @@ test_that("run_nmds computes NMDS coordinates and attaches metadata", {
   expect_true(is.numeric(attr(nmds_res, "stress")))
   expect_true(attr(nmds_res, "stress") < 0.3)
 })
+
+test_that("run_dbrda performs distance-based redundancy analysis with tidy biplots", {
+  data("gut_microbiome", package = "tidybiome")
+  dbrda_res <- run_dbrda(gut_microbiome, ~ treatment + age, distance = "bray")
+  
+  expect_s3_class(dbrda_res, "tidybiome_dbrda")
+  expect_s3_class(dbrda_res$samples, "tbl_df")
+  expect_true(all(c("sample_id", "dbRDA1", "dbRDA2", "treatment", "age") %in% colnames(dbrda_res$samples)))
+  expect_true(is.numeric(dbrda_res$variance_explained))
+  expect_true(length(dbrda_res$variance_explained) >= 2)
+  expect_output(print(dbrda_res), "tidybiome_dbrda")
+})
+

@@ -28,3 +28,19 @@ test_that("calc_cross_association automatically detects numeric variables when n
   # gut_microbiome has numeric columns 'age' and 'depth'
   expect_true(all(c("age", "depth") %in% unique(assoc_auto$variable)))
 })
+
+test_that("calc_network computes microbial co-occurrence networks with tidy edges and nodes", {
+  data("gut_microbiome", package = "tidybiome")
+  net <- calc_network(gut_microbiome, method = "spearman", min_prevalence = 0.3, r_cutoff = 0.3, p_cutoff = 0.1)
+  
+  expect_s3_class(net, "tidybiome_network")
+  expect_s3_class(net$nodes, "tbl_df")
+  expect_s3_class(net$edges, "tbl_df")
+  expect_true(all(c("taxon_id", "degree", "mean_abundance") %in% colnames(net$nodes)))
+  if (nrow(net$edges) > 0) {
+    expect_true(all(c("from", "to", "correlation", "p_value", "padj", "weight", "direction") %in% colnames(net$edges)))
+    expect_true(all(net$edges$weight >= 0.3))
+  }
+  expect_output(print(net), "tidybiome_network")
+})
+

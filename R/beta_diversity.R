@@ -47,6 +47,10 @@ calc_beta_diversity <- function(tb,
   sample_names <- colnames(mat)
   n_samp <- length(sample_names)
 
+  if (n_samp < 2) {
+    stop("Beta diversity calculation requires at least 2 samples.", call. = FALSE)
+  }
+
   dist_obj <- switch(
     metric,
     raitchison = {
@@ -245,7 +249,7 @@ calc_jsd <- function(mat) {
   })
 
   d_mat <- matrix(0, n, n, dimnames = list(sample_names, sample_names))
-  for (j in 1:(n - 1)) {
+  for (j in seq_len(n - 1)) {
     p <- prop[, j]
     h_p <- ent[j]
     for (k in (j + 1):n) {

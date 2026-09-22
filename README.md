@@ -2,7 +2,7 @@
 
 [![R-CMD-check](https://img.shields.io/badge/R-4.1+-blue.svg)](https://cran.r-project.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 239 passing](https://img.shields.io/badge/tests-239%20passed-success.svg)](https://github.com/tidybiome/tidybiome)
+[![Tests: 249 passing](https://img.shields.io/badge/tests-249%20passed-success.svg)](https://github.com/mladen5000/tidybiome)
 
 **`tidybiome`** is a tidyverse-native, publication-aesthetic R package designed as an up-to-date "Swiss Army knife" for downstream microbiome analysis. It adheres strictly to modern `tidyR` and `tidyverse` principles while incorporating cutting-edge methodologies from recent literature and **bioRxiv preprints (2024–2026)**.
 

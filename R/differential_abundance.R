@@ -79,10 +79,24 @@ calc_differential_abundance <- function(tb,
 
   covariate_vars <- setdiff(all.vars(formula), target_var)
 
+  # Check for NA values in formula variables
+  formula_vars <- all.vars(formula)
+  if (any(is.na(sample_df[, formula_vars, drop = FALSE]))) {
+    stop("Sample metadata variables in `formula` contain NA values. Please filter or impute missing samples first.", call. = FALSE)
+  }
+
   target_vals <- sample_df[[target_var]]
   is_continuous <- is.numeric(target_vals)
 
-  if (!is_continuous) {
+  if (is_continuous) {
+    if (stats::sd(target_vals, na.rm = TRUE) == 0) {
+      stop(sprintf("Continuous predictor '%s' has zero variance (all values are identical).", target_var), call. = FALSE)
+    }
+  } else {
+    distinct_lvls <- unique(stats::na.omit(target_vals))
+    if (length(distinct_lvls) < 2) {
+      stop(sprintf("Categorical predictor '%s' must have at least 2 distinct levels.", target_var), call. = FALSE)
+    }
     sample_df[[target_var]] <- as.factor(target_vals)
   }
 

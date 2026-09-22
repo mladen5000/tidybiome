@@ -34,12 +34,34 @@ tidy_microbiome <- function(counts,
   if (!is.numeric(counts)) {
     stop("`counts` must be a numeric matrix.", call. = FALSE)
   }
+  if (nrow(counts) == 0 || ncol(counts) == 0) {
+    stop("`counts` matrix must have at least 1 taxon (row) and 1 sample (column).", call. = FALSE)
+  }
+  if (any(is.na(counts))) {
+    stop("`counts` matrix contains NA or NaN values. Missing values should be imputed or replaced with 0.", call. = FALSE)
+  }
+  if (any(is.infinite(counts))) {
+    stop("`counts` matrix cannot contain Infinite values.", call. = FALSE)
+  }
+  if (any(counts < 0, na.rm = TRUE)) {
+    stop("`counts` matrix cannot contain negative values.", call. = FALSE)
+  }
   if (is.null(rownames(counts)) || is.null(colnames(counts))) {
     stop("`counts` matrix must have both rownames (taxa) and colnames (samples).", call. = FALSE)
   }
 
+  colnames(counts) <- trimws(colnames(counts))
+  rownames(counts) <- trimws(rownames(counts))
+
   sample_names <- colnames(counts)
   taxon_names  <- rownames(counts)
+
+  if (anyDuplicated(sample_names)) {
+    stop("Duplicate column names (sample IDs) found in `counts` matrix.", call. = FALSE)
+  }
+  if (anyDuplicated(taxon_names)) {
+    stop("Duplicate row names (taxon IDs) found in `counts` matrix.", call. = FALSE)
+  }
 
   # 2. Process sample_data
   if (is.null(sample_data)) {

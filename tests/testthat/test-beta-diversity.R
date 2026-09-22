@@ -66,3 +66,24 @@ test_that("Tree-Wasserstein and DTH test evaluate beta diversity and homogeneity
   expect_true(all(c("statistic", "p_value", "n_perm") %in% colnames(dth_res)))
   expect_true(dth_res$p_value >= 0 && dth_res$p_value <= 1)
 })
+
+test_that("calc_unifrac calculates valid unweighted and weighted UniFrac distances on trees", {
+  counts <- matrix(c(10, 0, 5, 20), nrow = 2, ncol = 2,
+                   dimnames = list(c("T1", "T2"), c("S1", "S2")))
+  tree <- ape::read.tree(text = "(T1:0.5,T2:0.5);")
+  tb <- tidy_microbiome(counts, phy_tree = tree)
+
+  # Unweighted UniFrac
+  tb_u <- calc_beta_diversity(tb, metric = "unifrac")
+  d_u <- get_distance(tb_u, "unifrac")
+  expect_s3_class(d_u, "dist")
+  expect_equal(attr(d_u, "Size"), 2)
+  expect_true(all(d_u >= 0 & d_u <= 1))
+
+  # Weighted UniFrac
+  tb_w <- calc_beta_diversity(tb, metric = "wunifrac")
+  d_w <- get_distance(tb_w, "wunifrac")
+  expect_s3_class(d_w, "dist")
+  expect_true(all(d_w >= 0 & d_w <= 1))
+})
+

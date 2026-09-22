@@ -133,11 +133,32 @@ aggregate_taxa <- function(tb, rank, na.rm = FALSE) {
     }
   }
 
+  orig_tree <- attr(tb, "phy_tree")
+  new_tree <- NULL
+  if (!is.null(orig_tree) && requireNamespace("ape", quietly = TRUE)) {
+    rep_taxa <- character(length(unique_ranks))
+    names(rep_taxa) <- unique_ranks
+    for (ur in unique_ranks) {
+      members <- tax_df$taxon_id[group_vec == ur]
+      in_tree <- intersect(members, orig_tree$tip.label)
+      if (length(in_tree) > 0) {
+        rep_taxa[ur] <- in_tree[1]
+      }
+    }
+    valid_reps <- rep_taxa[rep_taxa != ""]
+    if (length(valid_reps) >= 2) {
+      pruned <- ape::keep.tip(orig_tree, valid_reps)
+      name_map <- stats::setNames(names(valid_reps), valid_reps)
+      pruned$tip.label <- as.character(name_map[pruned$tip.label])
+      new_tree <- pruned
+    }
+  }
+
   sample_df <- tibble::as_tibble(tb)
   out <- sample_df
   attr(out, "assays")    <- new_assays
   attr(out, "tax_table") <- tibble::as_tibble(new_tax)
-  attr(out, "phy_tree")  <- NULL  # Tree is invalid after rank agglomeration
+  attr(out, "phy_tree")  <- new_tree
   attr(out, "metadata")  <- attr(tb, "metadata")
   class(out) <- c("tidy_microbiome", "tbl_df", "tbl", "data.frame")
   out

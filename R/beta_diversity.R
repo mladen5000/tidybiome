@@ -30,7 +30,7 @@
 #' tb <- calc_beta_diversity(tb, metric = "raitchison")
 #' d <- get_distance(tb, "raitchison")
 calc_beta_diversity <- function(tb,
-                                metric = c("raitchison", "wasserstein", "aitchison", "bray", "jaccard", "jsd"),
+                                metric = c("raitchison", "unifrac", "wunifrac", "wasserstein", "aitchison", "bray", "jaccard", "jsd"),
                                 assay = "counts",
                                 pseudocount = 1) {
   if (!inherits(tb, "tidy_microbiome")) {
@@ -53,6 +53,8 @@ calc_beta_diversity <- function(tb,
       rclr_mat <- calc_rclr_matrix(mat)
       stats::dist(t(rclr_mat), method = "euclidean")
     },
+    unifrac = calc_unifrac(tb, weighted = FALSE, assay = assay),
+    wunifrac = calc_unifrac(tb, weighted = TRUE, normalized = TRUE, assay = assay),
     wasserstein = calc_tree_wasserstein(mat, attr(tb, "tax_table")),
     aitchison = {
       clr_mat <- calc_clr_matrix(mat, pseudocount = pseudocount)
@@ -68,6 +70,114 @@ calc_beta_diversity <- function(tb,
 
   attr(tb, "metadata")$distances[[metric]] <- dist_obj
   tb
+}
+
+#' Calculate Unweighted or Weighted UniFrac Distance
+#'
+#' @description
+#' Computes phylogenetic UniFrac dissimilarity matrices between samples using an attached
+#' phylogenetic tree (`ape::phylo`). Supports both qualitative (unweighted) and quantitative
+#' (weighted normalized) UniFrac metrics.
+#'
+#' @param tb A `tidy_microbiome` object with an attached `phy_tree`.
+#' @param weighted Logical. If `TRUE`, computes weighted UniFrac (accounting for relative abundance).
+#'   If `FALSE` (default), computes unweighted UniFrac (based on presence/absence).
+#' @param normalized Logical. If `TRUE` (default), normalizes weighted UniFrac by total tree branch length.
+#' @param assay Character string naming the abundance assay to use. Defaults to `"counts"`.
+#'
+#' @return A `dist` object of pairwise UniFrac distances.
+#' @export
+calc_unifrac <- function(tb, weighted = FALSE, normalized = TRUE, assay = "counts") {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+  tree <- attr(tb, "phy_tree")
+  if (is.null(tree)) {
+    stop("`calc_unifrac` requires an attached phylogenetic tree (`phy_tree`). Use `set_tree()` first.", call. = FALSE)
+  }
+  assays <- attr(tb, "assays")
+  if (!assay %in% names(assays)) {
+    stop(sprintf("Assay '%s' not found in tidy_microbiome.", assay), call. = FALSE)
+  }
+
+  mat <- assays[[assay]]
+  taxa_names <- rownames(mat)
+  sample_names <- colnames(mat)
+  n_samp <- length(sample_names)
+
+  common_tips <- intersect(tree$tip.label, taxa_names)
+  if (length(common_tips) < 2) {
+    stop("Fewer than 2 taxa in assay match the tree tip labels.", call. = FALSE)
+  }
+
+  if (length(tree$tip.label) > length(common_tips)) {
+    if (requireNamespace("ape", quietly = TRUE)) {
+      tree <- ape::keep.tip(tree, common_tips)
+    }
+  }
+  mat <- mat[common_tips, , drop = FALSE]
+
+  prop <- calc_relabundance_matrix(mat)
+  n_tips <- length(tree$tip.label)
+  tip_labels <- tree$tip.label
+  tip_order <- match(tip_labels, rownames(mat))
+  prop_ordered <- prop[tip_order, , drop = FALSE]
+
+  n_edges <- nrow(tree$edge)
+  edge_lengths <- if (!is.null(tree$edge.length)) tree$edge.length else rep(1, n_edges)
+
+  child_to_edge <- integer(max(tree$edge))
+  child_to_edge[tree$edge[, 2]] <- seq_len(n_edges)
+
+  M <- matrix(0, nrow = n_edges, ncol = n_tips)
+  root_node <- min(tree$edge[, 1])
+  for (t in seq_len(n_tips)) {
+    curr <- t
+    while (curr > 0 && curr != root_node) {
+      e <- child_to_edge[curr]
+      if (e > 0) {
+        M[e, t] <- 1
+        curr <- tree$edge[e, 1]
+      } else {
+        break
+      }
+    }
+  }
+
+  edge_prop <- M %*% prop_ordered
+  d_mat <- matrix(0, nrow = n_samp, ncol = n_samp, dimnames = list(sample_names, sample_names))
+
+  if (!weighted) {
+    edge_occ <- (edge_prop > 0) * 1
+    for (j in 1:(n_samp - 1)) {
+      occ_j <- edge_occ[, j]
+      for (k in (j + 1):n_samp) {
+        occ_k <- edge_occ[, k]
+        diff_edges <- abs(occ_j - occ_k)
+        union_edges <- pmax(occ_j, occ_k)
+        num <- sum(edge_lengths * diff_edges)
+        denom <- sum(edge_lengths * union_edges)
+        val <- if (denom > 0) num / denom else 0
+        d_mat[k, j] <- val
+        d_mat[j, k] <- val
+      }
+    }
+  } else {
+    for (j in 1:(n_samp - 1)) {
+      p_j <- edge_prop[, j]
+      for (k in (j + 1):n_samp) {
+        p_k <- edge_prop[, k]
+        diff_p <- abs(p_j - p_k)
+        num <- sum(edge_lengths * diff_p)
+        denom <- if (normalized) sum(edge_lengths * (p_j + p_k)) else 1
+        val <- if (denom > 0) num / denom else 0
+        d_mat[k, j] <- val
+        d_mat[j, k] <- val
+      }
+    }
+  }
+
+  stats::as.dist(d_mat)
 }
 
 #' Extract Distance Matrix from tidy_microbiome

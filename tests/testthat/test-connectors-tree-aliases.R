@@ -34,3 +34,16 @@ test_that("as_phyloseq, as_mia, and to_mia aliases are exported", {
     expect_error(to_mia(gut_microbiome), "Package 'TreeSummarizedExperiment' is required")
   }
 })
+
+test_that("aggregate_taxa preserves tree topology when tree is present", {
+  counts <- matrix(c(10, 20, 5, 15), nrow = 2, ncol = 2,
+                   dimnames = list(c("T1", "T2"), c("S1", "S2")))
+  tax <- data.frame(taxon_id = c("T1", "T2"), Phylum = c("P1", "P2"))
+  tree <- ape::read.tree(text = "(T1:1,T2:1);")
+  tb <- tidy_microbiome(counts, tax_table = tax, phy_tree = tree)
+  
+  tb_agg <- aggregate_taxa(tb, rank = "Phylum")
+  expect_s3_class(get_tree(tb_agg), "phylo")
+  expect_true(all(c("P1", "P2") %in% get_tree(tb_agg)$tip.label))
+})
+

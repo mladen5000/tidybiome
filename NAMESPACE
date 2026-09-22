@@ -37,7 +37,6 @@ export(calc_unifrac)
 export(dth_test)
 export(filter_prevalent)
 export(filter_taxa)
-export(validate_tidy_microbiome)
 export(from_vegan)
 export(get_distance)
 export(get_ordination)
@@ -66,6 +65,7 @@ export(to_phyloseq)
 export(to_tse)
 export(to_vegan)
 export(transform_abundance)
+export(validate_tidy_microbiome)
 importFrom(dplyr,
   arrange,
   filter,

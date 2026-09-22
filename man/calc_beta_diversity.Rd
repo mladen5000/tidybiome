@@ -6,7 +6,8 @@
 \usage{
 calc_beta_diversity(
   tb,
-  metric = c("raitchison", "wasserstein", "aitchison", "bray", "jaccard", "jsd"),
+  metric = c("raitchison", "unifrac", "wunifrac", "wasserstein", "aitchison", "bray",
+    "jaccard", "jsd"),
   assay = "counts",
   pseudocount = 1
 )

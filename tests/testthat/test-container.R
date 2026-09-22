@@ -1,3 +1,6 @@
+library(testthat)
+library(tidybiome)
+
 test_that("tidy_microbiome initializes and displays correctly", {
   counts <- matrix(c(10, 0, 5, 20, 15, 2, 0, 8), nrow = 2, ncol = 4,
                    dimnames = list(c("ASV1", "ASV2"), c("S1", "S2", "S3", "S4")))

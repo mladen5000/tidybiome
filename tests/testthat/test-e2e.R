@@ -1,3 +1,6 @@
+library(testthat)
+library(tidybiome)
+
 test_that("full end-to-end tidybiome pipeline runs flawlessly", {
   # Load demo data
   data("gut_microbiome", package = "tidybiome")

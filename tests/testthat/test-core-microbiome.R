@@ -1,3 +1,6 @@
+library(testthat)
+library(tidybiome)
+
 test_that("calc_core_microbiome detects core members accurately", {
   counts <- matrix(c(50, 40, 60, 55, 45,
                      0,  0,  10, 0,  0), nrow = 2, byrow = TRUE,

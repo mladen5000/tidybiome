@@ -1,3 +1,6 @@
+library(testthat)
+library(tidybiome)
+
 test_that("rclr handles zero-inflated matrices without NaNs or pseudocounts", {
   counts <- matrix(c(100, 0, 50, 0,
                      20,  10, 0, 5), nrow = 2, byrow = TRUE,

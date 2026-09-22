@@ -1,3 +1,6 @@
+library(testthat)
+library(tidybiome)
+
 test_that("RPCA generates sample coordinates, taxon loadings, and explained variance", {
   counts <- matrix(c(100, 20, 5, 2,
                      5, 10, 80, 70,

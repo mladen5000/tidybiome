@@ -1,3 +1,6 @@
+library(testthat)
+library(tidybiome)
+
 test_that("tidy_abundance extracts long format and rolls up taxonomy", {
   counts <- matrix(c(10, 5, 20, 8), nrow = 2, ncol = 2,
                    dimnames = list(c("ASV1", "ASV2"), c("S1", "S2")))

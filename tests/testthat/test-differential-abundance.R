@@ -1,3 +1,6 @@
+library(testthat)
+library(tidybiome)
+
 test_that("calc_differential_abundance runs consensus engines and flags biomarkers", {
   # Taxon 1 strongly differential between groups A and B
   counts <- matrix(c(100, 120, 110,  5,   8,   6,

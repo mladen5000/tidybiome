@@ -1,3 +1,6 @@
+library(testthat)
+library(tidybiome)
+
 test_that("Robust Aitchison distance computes Euclidean distance on rclr", {
   counts <- matrix(c(10, 0, 5,
                      20, 10, 0,

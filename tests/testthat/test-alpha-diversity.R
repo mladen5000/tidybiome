@@ -1,3 +1,6 @@
+library(testthat)
+library(tidybiome)
+
 test_that("Hill numbers profile calculates q=0, 1, 2 on effective species scale", {
   # Even community with 4 species: effective species should all be 4
   counts <- matrix(c(25, 25, 25, 25), nrow = 4, ncol = 1,

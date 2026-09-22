@@ -6,7 +6,10 @@
 \usage{
 calc_differential_abundance(
   tb,
-  group,
+  group = NULL,
+  formula = NULL,
+  covariates = NULL,
+  contrast = NULL,
   methods = c("consensus", "caft", "linda", "clr_linear", "wilcoxon"),
   fdr_cutoff = 0.05,
   assay = "counts",
@@ -16,7 +19,14 @@ calc_differential_abundance(
 \arguments{
 \item{tb}{A \code{tidy_microbiome} object.}
 
-\item{group}{Character string naming the binary grouping variable in sample metadata (e.g. \code{"treatment"}).}
+\item{group}{Optional character string naming the primary predictor column in sample metadata.}
+
+\item{formula}{Optional model formula specifying the target predictor and covariates (e.g. \code{~ treatment + age + batch}).}
+
+\item{covariates}{Optional character vector of covariate names to adjust for if \code{formula} is omitted.}
+
+\item{contrast}{Optional character string naming the specific predictor term of interest in \code{formula}.
+Defaults to the first term specified in \code{formula} or \code{group}.}
 
 \item{methods}{Character vector of engines to run. Options:
 \itemize{
@@ -24,8 +34,8 @@ calc_differential_abundance(
 \item \code{"caft"}: Compositional Log-Linear Model with Zero Cells (bioRxiv Dec 2025),
 jointly modeling presence/absence probability and conditional log-abundance.
 \item \code{"linda"}: Linear Models for Differential Abundance with compositional bias correction.
-\item \code{"clr_linear"}: Linear regression on centered log-ratio abundances.
-\item \code{"wilcoxon"}: Non-parametric two-sample Wilcoxon rank-sum test.
+\item \code{"clr_linear"}: Linear regression on centered log-ratio abundances with covariate adjustment.
+\item \code{"wilcoxon"}: Non-parametric two-sample Wilcoxon rank-sum or rank-regression test.
 }}
 
 \item{fdr_cutoff}{Numeric false discovery rate threshold (default: 0.05).}
@@ -38,19 +48,20 @@ jointly modeling presence/absence probability and conditional log-abundance.
 A \link[tibble:tbl_df]{tibble::tbl_df} with one row per taxon containing:
 \itemize{
 \item \code{taxon_id}: Taxon identifier.
-\item \code{log2fc}: Average log2 fold change across engines.
+\item \code{log2fc}: Average log2 fold change or regression slope across engines.
 \item \code{p_consensus}: Combined p-value using Cauchy combination test.
 \item \code{padj_consensus}: Benjamini-Hochberg adjusted consensus p-value.
-\item \code{agreement_score}: Number of engines agreeing on significance and direction.
+\item \code{agreement_score}: Number of engines agreeing on significance.
 \item \code{is_significant}: Logical flag whether taxon meets \code{fdr_cutoff}.
 \item Per-method statistics and taxonomic annotations.
 }
 }
 \description{
 Implements a state-of-the-art consensus differential abundance testing framework
-inspired by recent bioRxiv preprints (\emph{ConsensusMetaDA}, \emph{dar}, \emph{LinDA}). Because
-individual differential abundance methods frequently produce contradictory results,
-\code{tidybiome} runs multiple complementary engines (LinDA compositional regression,
-CLR linear models, and non-parametric Wilcoxon tests) and computes consensus
+inspired by recent bioRxiv preprints (\emph{ConsensusMetaDA}, \emph{dar}, \emph{LinDA}). Supports
+full formula specifications (\code{formula = ~ treatment + age + batch}) to control
+for clinical covariates, continuous biomarkers (e.g. \code{formula = ~ bmi}), and multi-group
+experimental designs. Runs multiple complementary engines (LinDA compositional regression,
+CLR linear models, two-part CAFT, and rank/Wilcoxon tests) and computes consensus
 p-values (via the Cauchy combination test), agreement scores, and effect sizes.
 }

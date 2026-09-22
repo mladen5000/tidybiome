@@ -1,3 +1,6 @@
+library(testthat)
+library(tidybiome)
+
 test_that("all plotting functions return valid ggplot2 objects", {
   counts <- matrix(c(100, 20, 5, 2,
                      5, 10, 80, 70), nrow = 2, byrow = TRUE,

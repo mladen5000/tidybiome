@@ -3,6 +3,8 @@ Type: Package
 Title: Tidyverse-Native Modern Microbiome Analysis Suite
 Version: 0.1.0
 Authors@R: person("Tidybiome", "Authors", email = "info@tidybiome.org", role = c("aut", "cre"))
+Author: Tidybiome Authors
+Maintainer: Tidybiome Authors <info@tidybiome.org>
 Description: A modern, tidyverse-native Swiss Army knife for downstream microbiome
     analysis. Implements state-of-the-art bioRxiv and literature methodologies for
     compositional transformation (Robust CLR), alpha diversity (unified Hill numbers

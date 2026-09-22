@@ -19,6 +19,8 @@ navbar:
           href: articles/introduction_to_tidybiome.html
         - text: "Statistical Rigor and Ecological Modeling"
           href: articles/statistical_rigor_and_ecology.html
+        - text: "Bioconductor Interoperability (TreeSE & mia)"
+          href: articles/bioconductor_interoperability.html
 
 reference:
   - title: "Pipeline Ingestion & Import"

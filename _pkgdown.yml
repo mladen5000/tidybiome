@@ -34,10 +34,11 @@ reference:
     desc: "Creating, subsetting, and validating tidy_microbiome objects."
     contents:
       - tidy_microbiome
-      - "[.tidy_microbiome"
+      - summary.tidy_microbiome
       - filter_taxa
       - validate_tidy_microbiome
       - tidy_abundance
+      - tidy_taxa
       - assay
       - tax_table
       - aggregate_taxa
@@ -48,18 +49,26 @@ reference:
       - transform_abundance
       - calc_gmpr_size_factors
 
+  - title: "Sample Quality Control & Diagnostics"
+    desc: "Per-sample library depth, feature richness, sparsity, and diagnostic plots."
+    contents:
+      - calc_qc_metrics
+      - plot_qc
+
   - title: "Diversity & Distance Metrics"
     desc: "Unified alpha diversity profiles and beta diversity dissimilarities."
     contents:
       - calc_alpha_diversity
       - calc_beta_diversity
       - calc_unifrac
+      - get_distance
       - dth_test
 
   - title: "Dimensionality Reduction & Ordination"
     desc: "RPCA biplots, contrastive PCA, NMDS, and db-RDA."
     contents:
       - calc_ordination
+      - get_ordination
       - run_dbrda
       - run_nmds
 
@@ -68,7 +77,7 @@ reference:
     contents:
       - calc_differential_abundance
 
-  - title: "Ecological Screening & Networks"
+  - title: "Ecological Screening, Networks & Core Microbiome"
     desc: "Prevalence, dominance, divergence, cross-associations, and co-occurrence graphs."
     contents:
       - calc_prevalence
@@ -77,17 +86,19 @@ reference:
       - calc_divergence
       - calc_cross_association
       - calc_network
+      - calc_core_microbiome
 
   - title: "Ecosystem Interoperability Bridges"
-    desc: "Connectors to vegan, phyloseq, mia, and ape."
+    desc: "Connectors to vegan, phyloseq, mia, S7, and ape."
     contents:
       - to_vegan
       - from_vegan
       - run_permanova
       - run_betadisper
       - to_phyloseq
-      - as_phyloseq
       - to_tse
+      - to_s7
+      - from_s7
       - as_tidybiome
       - set_tree
       - get_tree
@@ -102,5 +113,13 @@ reference:
       - plot_da_volcano
       - plot_dbrda
       - plot_network
+      - plot_core
+      - plot_qc
       - report_tidybiome
       - theme_tidybiome
+      - tidybiome_pal
+
+  - title: "Example Datasets"
+    desc: "Built-in demonstration datasets."
+    contents:
+      - gut_microbiome

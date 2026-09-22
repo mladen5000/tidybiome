@@ -4,3 +4,6 @@
 *.Rproj
 .superpowers/
 .DS_Store
+docs/
+*.tar.gz
+*.Rcheck/

@@ -221,13 +221,13 @@ calc_network <- function(tb,
 
 #' @export
 print.tidybiome_network <- function(x, ...) {
-  cat("── tidybiome_network (Microbial Co-Occurrence Network) ──\n")
-  cat(sprintf("  • Nodes (Taxa): %d\n", nrow(x$nodes)))
-  cat(sprintf("  • Significant edges: %d (|r| >= %.2f, padj <= %.2f)\n",
+  cat("-- tidybiome_network (Microbial Co-Occurrence Network) --\n")
+  cat(sprintf("  * Nodes (Taxa): %d\n", nrow(x$nodes)))
+  cat(sprintf("  * Significant edges: %d (|r| >= %.2f, padj <= %.2f)\n",
               nrow(x$edges), x$r_cutoff, x$p_cutoff))
   pos_n <- sum(x$edges$direction == "positive")
   neg_n <- sum(x$edges$direction == "negative")
-  cat(sprintf("  • Positive: %d, Negative: %d\n", pos_n, neg_n))
+  cat(sprintf("  * Positive: %d, Negative: %d\n", pos_n, neg_n))
   invisible(x)
 }
 

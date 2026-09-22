@@ -165,9 +165,9 @@ to_vegan <- function(tb, assay = "counts") {
 
 #' @export
 print.tidybiome_vegan <- function(x, ...) {
-  cat(sprintf("── tidybiome_vegan [%d samples × %d taxa] ──\n", nrow(x$comm), ncol(x$comm)))
-  cat(sprintf("  • Community matrix: %d rows × %d columns\n", nrow(x$comm), ncol(x$comm)))
-  cat(sprintf("  • Environmental metadata: %d variables (%s)\n", ncol(x$env), paste(head(names(x$env), 4), collapse = ", ")))
+  cat(sprintf("-- tidybiome_vegan [%d samples x %d taxa] --\n", nrow(x$comm), ncol(x$comm)))
+  cat(sprintf("  * Community matrix: %d rows x %d columns\n", nrow(x$comm), ncol(x$comm)))
+  cat(sprintf("  * Environmental metadata: %d variables (%s)\n", ncol(x$env), paste(head(names(x$env), 4), collapse = ", ")))
   invisible(x)
 }
 

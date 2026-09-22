@@ -1,0 +1,94 @@
+url: https://tidybiome.org/
+
+template:
+  bootstrap: 5
+  bootswatch: flatly
+
+navbar:
+  structure:
+    left: [intro, reference, articles, news]
+    right: [github]
+  components:
+    intro:
+      text: Get Started
+      href: articles/introduction_to_tidybiome.html
+    articles:
+      text: Articles
+      menu:
+        - text: "Getting Started with tidybiome"
+          href: articles/introduction_to_tidybiome.html
+        - text: "Statistical Rigor and Ecological Modeling"
+          href: articles/statistical_rigor_and_ecology.html
+
+reference:
+  - title: "Container & Data Wrangling"
+    desc: "Creating, subsetting, and validating tidy_microbiome objects."
+    contents:
+      - tidy_microbiome
+      - "[.tidy_microbiome"
+      - filter_taxa
+      - validate_tidy_microbiome
+      - tidy_abundance
+      - assay
+      - tax_table
+      - aggregate_taxa
+
+  - title: "Transformations & Normalization"
+    desc: "Compositional and sequencing depth standardizations."
+    contents:
+      - transform_abundance
+
+  - title: "Diversity & Distance Metrics"
+    desc: "Unified alpha diversity profiles and beta diversity dissimilarities."
+    contents:
+      - calc_alpha_diversity
+      - calc_beta_diversity
+      - calc_unifrac
+      - dth_test
+
+  - title: "Dimensionality Reduction & Ordination"
+    desc: "RPCA biplots, contrastive PCA, NMDS, and db-RDA."
+    contents:
+      - calc_ordination
+      - run_dbrda
+      - run_nmds
+
+  - title: "Differential Abundance"
+    desc: "Consensus and multi-engine biomarker discovery with formulas and covariates."
+    contents:
+      - calc_differential_abundance
+
+  - title: "Ecological Screening & Networks"
+    desc: "Prevalence, dominance, divergence, cross-associations, and co-occurrence graphs."
+    contents:
+      - calc_prevalence
+      - filter_prevalent
+      - calc_dominant
+      - calc_divergence
+      - calc_cross_association
+      - calc_network
+
+  - title: "Ecosystem Interoperability Bridges"
+    desc: "Connectors to vegan, phyloseq, mia, and ape."
+    contents:
+      - to_vegan
+      - from_vegan
+      - run_permanova
+      - run_betadisper
+      - to_phyloseq
+      - as_phyloseq
+      - to_tse
+      - as_tidybiome
+      - set_tree
+      - get_tree
+
+  - title: "Publication-Grade Visualizations"
+    desc: "High-aesthetic ggplot2 extensions."
+    contents:
+      - plot_composition
+      - plot_ordination
+      - plot_alpha
+      - plot_da_volcano
+      - plot_dbrda
+      - plot_network
+      - theme_tidybiome

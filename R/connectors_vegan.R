@@ -153,11 +153,11 @@ run_betadisper <- function(tb, group, assay = "counts", method = "bray", permuta
 
 #' @export
 print.tidybiome_betadisper <- function(x, ...) {
-  cat("── tidybiome_betadisper (Multivariate Dispersion Test) ──\n")
-  cat(sprintf("  • Statistic F: %.4f (p = %.4f)\n", x$test$f_stat[1], x$test$p_value[1]))
-  cat("  • Group centroids:\n")
+  cat("-- tidybiome_betadisper (Multivariate Dispersion Test) --\n")
+  cat(sprintf("  * Statistic F: %.4f (p = %.4f)\n", x$test$f_stat[1], x$test$p_value[1]))
+  cat("  * Group centroids:\n")
   for (i in seq_len(nrow(x$group_summary))) {
-    cat(sprintf("    - %s: mean distance = %.4f (± %.4f)\n",
+    cat(sprintf("    - %s: mean distance = %.4f (+/- %.4f)\n",
                 x$group_summary$group[i],
                 x$group_summary$mean_distance[i],
                 x$group_summary$se[i]))
@@ -318,13 +318,13 @@ run_dbrda <- function(tb, formula, assay = "counts", distance = "bray", ...) {
 #' @export
 print.tidybiome_dbrda <- function(x, ...) {
   n_ax <- length(x$variance_explained)
-  cat("── tidybiome_dbrda (Distance-Based Redundancy Analysis) ──\n")
-  cat(sprintf("  • Constrained axes: %d\n", n_ax))
+  cat("-- tidybiome_dbrda (Distance-Based Redundancy Analysis) --\n")
+  cat(sprintf("  * Constrained axes: %d\n", n_ax))
   if (n_ax >= 2) {
-    cat(sprintf("  • Inertia explained: dbRDA1 = %.2f%%, dbRDA2 = %.2f%%\n",
+    cat(sprintf("  * Inertia explained: dbRDA1 = %.2f%%, dbRDA2 = %.2f%%\n",
                 x$variance_explained[1] * 100, x$variance_explained[2] * 100))
   }
-  cat(sprintf("  • Samples: %d\n", nrow(x$samples)))
+  cat(sprintf("  * Samples: %d\n", nrow(x$samples)))
   invisible(x)
 }
 

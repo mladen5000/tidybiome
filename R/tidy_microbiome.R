@@ -281,9 +281,11 @@ filter_taxa <- function(tb, ...) {
 #' Validate Integrity of a tidy_microbiome Object
 #'
 #' @param tb An object to validate.
+#' @param verbose Logical. If `TRUE`, prints a confirmation message upon successful validation.
+#'   Defaults to `FALSE`.
 #' @return `TRUE` if valid, otherwise throws an error.
 #' @export
-validate_tidy_microbiome <- function(tb) {
+validate_tidy_microbiome <- function(tb, verbose = FALSE) {
   if (!inherits(tb, "tidy_microbiome")) {
     stop("Object must inherit from 'tidy_microbiome'.", call. = FALSE)
   }
@@ -330,7 +332,10 @@ validate_tidy_microbiome <- function(tb) {
     }
   }
   
-  TRUE
+  if (verbose) {
+    cat("Container validation passed: all assays, taxonomy, and tree tips synchronized.\n")
+  }
+  invisible(TRUE)
 }
 
 

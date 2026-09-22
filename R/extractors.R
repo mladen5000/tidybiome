@@ -163,3 +163,42 @@ aggregate_taxa <- function(tb, rank, na.rm = FALSE) {
   class(out) <- c("tidy_microbiome", "tbl_df", "tbl", "data.frame")
   out
 }
+
+#' Extract Assay Matrix from tidy_microbiome
+#'
+#' @param x A `tidy_microbiome` object.
+#' @param name Character string naming the assay to extract (e.g. `"counts"`, `"rclr"`, `"tss"`).
+#'   Defaults to `"counts"`.
+#' @param ... Additional arguments (not used).
+#'
+#' @return A numeric matrix with taxa as rows and samples as columns.
+#' @export
+assay <- function(x, name = "counts", ...) {
+  UseMethod("assay")
+}
+
+#' @export
+assay.tidy_microbiome <- function(x, name = "counts", ...) {
+  assays <- attr(x, "assays")
+  if (is.null(assays) || !name %in% names(assays)) {
+    stop(sprintf("Assay '%s' not found in tidy_microbiome. Available: %s",
+                 name, paste(names(assays), collapse = ", ")), call. = FALSE)
+  }
+  assays[[name]]
+}
+
+#' Extract Taxonomy Table from tidy_microbiome
+#'
+#' @param x A `tidy_microbiome` object.
+#' @param ... Additional arguments (not used).
+#'
+#' @return A [tibble::tbl_df] with taxonomic lineage annotations.
+#' @export
+tax_table <- function(x, ...) {
+  UseMethod("tax_table")
+}
+
+#' @export
+tax_table.tidy_microbiome <- function(x, ...) {
+  tidy_taxa(x)
+}

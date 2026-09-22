@@ -1,0 +1,6 @@
+^\.superpowers$
+^tidybiome\.Rproj$
+^\.Rproj\.user$
+^tidybiome_.*\.tar\.gz$
+^tidybiome\.Rcheck$
+^_pkgdown\.yml$

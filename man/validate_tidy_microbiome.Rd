@@ -4,10 +4,13 @@
 \alias{validate_tidy_microbiome}
 \title{Validate Integrity of a tidy_microbiome Object}
 \usage{
-validate_tidy_microbiome(tb)
+validate_tidy_microbiome(tb, verbose = FALSE)
 }
 \arguments{
 \item{tb}{An object to validate.}
+
+\item{verbose}{Logical. If \code{TRUE}, prints a confirmation message upon successful validation.
+Defaults to \code{FALSE}.}
 }
 \value{
 \code{TRUE} if valid, otherwise throws an error.

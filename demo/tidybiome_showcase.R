@@ -110,8 +110,8 @@ print(table(gut_dom$dominant_taxa))
 # 10c. Sample Divergence from Control
 gut_div <- calc_divergence(gut_clean, reference = list(treatment = "Control"), method = "bray")
 cat("\nMean Bray-Curtis Divergence to Control Baseline:\n")
-cat(sprintf("  • Control Samples:  %.4f\n", mean(gut_div$divergence[gut_div$treatment == "Control"])))
-cat(sprintf("  • Treated Samples:  %.4f\n", mean(gut_div$divergence[gut_div$treatment == "Treated"])))
+cat(sprintf("  * Control Samples:  %.4f\n", mean(gut_div$divergence[gut_div$treatment == "Control"])))
+cat(sprintf("  * Treated Samples:  %.4f\n", mean(gut_div$divergence[gut_div$treatment == "Treated"])))
 
 # 10d. Taxon x Metadata Cross-Association
 assoc_res <- calc_cross_association(gut_clean, variables = c("age", "depth"))

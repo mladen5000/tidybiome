@@ -520,3 +520,141 @@ metric_display_name <- function(metric) {
     metric
   )
 }
+
+#' Plot Compositional Microbiome Heatmap
+#'
+#' @description
+#' Generates an aesthetic, publication-ready abundance heatmap for top taxa across samples,
+#' featuring hierarchical clustering of samples and taxa, compositional scaling,
+#' and optional metadata grouping.
+#'
+#' @param tb A `tidy_microbiome` object.
+#' @param rank Optional taxonomic rank to aggregate by before plotting (e.g. `"Genus"`).
+#' @param top_n Number of top abundant taxa to display (default: 25).
+#' @param assay Assay to extract and plot. Defaults to `"counts"`.
+#' @param scale Scaling applied to values: `"log10"`, `"relabundance"`, `"rclr"`, or `"none"`.
+#' @param cluster_samples Logical. If `TRUE` (default), clusters samples via hierarchical clustering.
+#' @param cluster_taxa Logical. If `TRUE` (default), clusters taxa via hierarchical clustering.
+#' @param annotation_col Optional sample metadata column to group or facet samples by.
+#' @param palette Palette option: `"viridis"`, `"magma"`, or `"plasma"`.
+#'
+#' @return A `ggplot2::ggplot` object.
+#' @export
+#'
+#' @examples
+#' counts <- matrix(c(100, 20, 5, 2, 5, 10, 80, 70), nrow = 2, byrow = TRUE,
+#'                  dimnames = list(c("Tax1", "Tax2"), c("S1", "S2", "S3", "S4")))
+#' sample_data <- data.frame(sample_id = c("S1", "S2", "S3", "S4"), group = c("A", "A", "B", "B"))
+#' tax_table <- data.frame(taxon_id = c("Tax1", "Tax2"), Genus = c("Bacteroides", "Prevotella"))
+#' tb <- tidy_microbiome(counts, sample_data, tax_table)
+#' p <- plot_heatmap(tb, top_n = 2)
+plot_heatmap <- function(tb,
+                         rank = NULL,
+                         top_n = 25,
+                         assay = "counts",
+                         scale = c("log10", "relabundance", "rclr", "none"),
+                         cluster_samples = TRUE,
+                         cluster_taxa = TRUE,
+                         annotation_col = NULL,
+                         palette = "viridis") {
+  if (!inherits(tb, "tidy_microbiome")) {
+    stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
+  }
+
+  scale <- match.arg(scale)
+
+  if (!is.null(rank)) {
+    tb <- aggregate_taxa(tb, rank = rank)
+  }
+
+  mat <- assay(tb, assay)
+  if (nrow(mat) == 0 || ncol(mat) == 0) {
+    stop("Assay matrix is empty.", call. = FALSE)
+  }
+
+  # Filter to top N taxa by total abundance
+  top_n <- min(top_n, nrow(mat))
+  row_sums <- rowSums(mat, na.rm = TRUE)
+  top_idx <- order(row_sums, decreasing = TRUE)[seq_len(top_n)]
+  mat_sub <- mat[top_idx, , drop = FALSE]
+
+  # Apply scaling
+  mat_scaled <- switch(
+    scale,
+    log10 = log10(mat_sub + 1),
+    relabundance = {
+      cs <- colSums(mat_sub)
+      cs[cs == 0] <- 1
+      sweep(mat_sub, 2, cs, "/")
+    },
+    rclr = calc_rclr_matrix(mat_sub),
+    none = mat_sub
+  )
+
+  # Cluster samples
+  if (cluster_samples && ncol(mat_scaled) > 2) {
+    dist_s <- stats::dist(t(mat_scaled))
+    hc_s <- stats::hclust(dist_s)
+    sample_order <- colnames(mat_scaled)[hc_s$order]
+  } else {
+    sample_order <- colnames(mat_scaled)
+  }
+
+  # Cluster taxa
+  if (cluster_taxa && nrow(mat_scaled) > 2) {
+    dist_t <- stats::dist(mat_scaled)
+    hc_t <- stats::hclust(dist_t)
+    taxa_order <- rownames(mat_scaled)[hc_t$order]
+  } else {
+    taxa_order <- rownames(mat_scaled)
+  }
+
+  n_samp <- ncol(mat_scaled)
+  n_taxa <- nrow(mat_scaled)
+
+  df <- tibble::tibble(
+    taxon_id = factor(rep(rownames(mat_scaled), times = n_samp), levels = taxa_order),
+    sample_id = factor(rep(colnames(mat_scaled), each = n_taxa), levels = sample_order),
+    value = as.vector(mat_scaled)
+  )
+
+  # Join metadata if annotation_col requested
+  meta <- tibble::as_tibble(tb)
+  if (!is.null(annotation_col) && annotation_col %in% colnames(meta)) {
+    df <- dplyr::left_join(df, meta[, c("sample_id", annotation_col)], by = "sample_id")
+  }
+
+  legend_label <- switch(
+    scale,
+    log10 = "log10(Counts + 1)",
+    relabundance = "Relative Abundance",
+    rclr = "Robust CLR",
+    none = "Abundance"
+  )
+
+  p <- ggplot2::ggplot(df, ggplot2::aes(x = .data$sample_id, y = .data$taxon_id, fill = .data$value)) +
+    ggplot2::geom_tile(color = "white", linewidth = 0.15) +
+    ggplot2::scale_fill_viridis_c(option = palette, name = legend_label) +
+    ggplot2::labs(
+      title = paste("Abundance Heatmap", if (!is.null(rank)) paste0("(", rank, ")") else ""),
+      x = "Sample",
+      y = if (!is.null(rank)) rank else "Taxon"
+    ) +
+    theme_tidybiome() +
+    ggplot2::theme(
+      axis.text.x = ggplot2::element_text(angle = 45, hjust = 1, vjust = 1, size = 8),
+      axis.text.y = ggplot2::element_text(size = 8),
+      panel.grid.major = ggplot2::element_blank(),
+      panel.grid.minor = ggplot2::element_blank()
+    )
+
+  if (!is.null(annotation_col) && annotation_col %in% colnames(df)) {
+    p <- p + ggplot2::facet_grid(
+      cols = ggplot2::vars(.data[[annotation_col]]),
+      scales = "free_x",
+      space = "free_x"
+    )
+  }
+
+  p
+}

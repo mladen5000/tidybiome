@@ -152,6 +152,23 @@ cat(sprintf("Filtered taxa by Phylum: remaining taxa = %d, tree tips = %d.\n",
             nrow(attr(tb_filt_taxa, "tax_table")), length(get_tree(tb_filt_taxa)$tip.label)))
 cat(sprintf("Container validation passed: %s\n", validate_tidy_microbiome(tb_filt_taxa)))
 
+# --- Step 12: Advanced Normalization, Heatmap, and HTML Report ---
+cat("\n--- Step 12: Ingestion, Heatmap, and HTML Diagnostic Report ---\n")
+
+# 12a. GMPR Normalization
+gut_clean <- transform_abundance(gut_clean, method = "gmpr")
+cat("Calculated zero-tolerant GMPR (Geometric Mean of Pairwise Ratios) normalization.\n")
+
+# 12b. Compositional Heatmap
+p_heat <- plot_heatmap(gut_clean, rank = "Genus", top_n = 15, annotation_col = "treatment")
+cat("Generated publication-ready hierarchical clustered heatmap with annotation tracks.\n")
+
+# 12c. Standalone Quality Control HTML Dashboard
+temp_report <- tempfile(fileext = ".html")
+report_tidybiome(gut_clean, output = temp_report, browse = FALSE)
+cat(sprintf("Generated standalone HTML diagnostic cohort dashboard (%d bytes).\n", file.info(temp_report)$size))
+unlink(temp_report)
+
 message("\n>>> SUCCESS: Full tidybiome pipeline completed with zero errors!")
 
 

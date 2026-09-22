@@ -6,10 +6,12 @@
 \usage{
 transform_abundance(
   tb,
-  method = c("rclr", "clr", "relabundance", "coverage", "log10", "pa"),
+  method = c("rclr", "clr", "relabundance", "coverage", "hellinger", "gmpr", "log10",
+    "pa"),
   assay = "counts",
   name = NULL,
-  pseudocount = 1
+  pseudocount = 1,
+  min_overlap = 2
 )
 }
 \arguments{
@@ -22,6 +24,8 @@ positive values are centered by the geometric mean of observed (non-zero) taxa.
 \item \code{"clr"}: Classic Centered Log-Ratio with pseudocount.
 \item \code{"relabundance"}: Total Sum Scaling (TSS), scaling each sample to sum to 1.
 \item \code{"coverage"}: Coverage-based standardization using Good-Turing sample coverage.
+\item \code{"hellinger"}: Hellinger transformation (square root of relative abundance).
+\item \code{"gmpr"}: Geometric Mean of Pairwise Ratios (Chen et al. 2018), zero-tolerant size-factor normalization.
 \item \code{"log10"}: Log10 transformation with pseudocount.
 \item \code{"pa"}: Presence/Absence binary transformation (0 or 1).
 }}
@@ -31,6 +35,8 @@ positive values are centered by the geometric mean of observed (non-zero) taxa.
 \item{name}{Optional character string naming the output assay. Defaults to \code{method}.}
 
 \item{pseudocount}{Numeric pseudocount added for \code{"clr"} and \code{"log10"}. Defaults to 1.}
+
+\item{min_overlap}{Minimum number of shared non-zero taxa required for GMPR pairwise ratios (default: 2).}
 }
 \value{
 An updated \code{tidy_microbiome} object with the new assay added.
@@ -45,4 +51,5 @@ counts <- matrix(c(100, 0, 50, 0, 20, 10, 0, 5), nrow = 2, byrow = TRUE,
                  dimnames = list(c("ASV1", "ASV2"), c("S1", "S2", "S3", "S4")))
 tb <- tidy_microbiome(counts)
 tb <- transform_abundance(tb, method = "rclr")
+tb <- transform_abundance(tb, method = "hellinger")
 }

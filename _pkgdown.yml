@@ -21,6 +21,13 @@ navbar:
           href: articles/statistical_rigor_and_ecology.html
 
 reference:
+  - title: "Pipeline Ingestion & Import"
+    desc: "Ingest outputs from DADA2, QIIME 2, and MetaPhlAn pipelines."
+    contents:
+      - import_dada2
+      - import_qiime2
+      - import_metaphlan
+
   - title: "Container & Data Wrangling"
     desc: "Creating, subsetting, and validating tidy_microbiome objects."
     contents:
@@ -37,6 +44,7 @@ reference:
     desc: "Compositional and sequencing depth standardizations."
     contents:
       - transform_abundance
+      - calc_gmpr_size_factors
 
   - title: "Diversity & Distance Metrics"
     desc: "Unified alpha diversity profiles and beta diversity dissimilarities."
@@ -82,13 +90,15 @@ reference:
       - set_tree
       - get_tree
 
-  - title: "Publication-Grade Visualizations"
-    desc: "High-aesthetic ggplot2 extensions."
+  - title: "Publication-Grade Visualizations & Dashboards"
+    desc: "High-aesthetic ggplot2 extensions and standalone HTML dashboards."
     contents:
       - plot_composition
+      - plot_heatmap
       - plot_ordination
       - plot_alpha
       - plot_da_volcano
       - plot_dbrda
       - plot_network
+      - report_tidybiome
       - theme_tidybiome

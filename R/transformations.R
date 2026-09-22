@@ -12,11 +12,14 @@
 #'   * `"clr"`: Classic Centered Log-Ratio with pseudocount.
 #'   * `"relabundance"`: Total Sum Scaling (TSS), scaling each sample to sum to 1.
 #'   * `"coverage"`: Coverage-based standardization using Good-Turing sample coverage.
+#'   * `"hellinger"`: Hellinger transformation (square root of relative abundance).
+#'   * `"gmpr"`: Geometric Mean of Pairwise Ratios (Chen et al. 2018), zero-tolerant size-factor normalization.
 #'   * `"log10"`: Log10 transformation with pseudocount.
 #'   * `"pa"`: Presence/Absence binary transformation (0 or 1).
 #' @param assay Character string naming the source assay to transform. Defaults to `"counts"`.
 #' @param name Optional character string naming the output assay. Defaults to `method`.
 #' @param pseudocount Numeric pseudocount added for `"clr"` and `"log10"`. Defaults to 1.
+#' @param min_overlap Minimum number of shared non-zero taxa required for GMPR pairwise ratios (default: 2).
 #'
 #' @return An updated `tidy_microbiome` object with the new assay added.
 #' @export
@@ -26,11 +29,13 @@
 #'                  dimnames = list(c("ASV1", "ASV2"), c("S1", "S2", "S3", "S4")))
 #' tb <- tidy_microbiome(counts)
 #' tb <- transform_abundance(tb, method = "rclr")
+#' tb <- transform_abundance(tb, method = "hellinger")
 transform_abundance <- function(tb,
-                                method = c("rclr", "clr", "relabundance", "coverage", "log10", "pa"),
+                                method = c("rclr", "clr", "relabundance", "coverage", "hellinger", "gmpr", "log10", "pa"),
                                 assay = "counts",
                                 name = NULL,
-                                pseudocount = 1) {
+                                pseudocount = 1,
+                                min_overlap = 2) {
   if (!inherits(tb, "tidy_microbiome")) {
     stop("`tb` must be a `tidy_microbiome` object.", call. = FALSE)
   }
@@ -53,6 +58,8 @@ transform_abundance <- function(tb,
     clr = calc_clr_matrix(mat, pseudocount = pseudocount),
     relabundance = calc_relabundance_matrix(mat),
     coverage = calc_coverage_matrix(mat),
+    hellinger = calc_hellinger_matrix(mat),
+    gmpr = calc_gmpr_matrix(mat, min_overlap = min_overlap),
     log10 = calc_log10_matrix(mat, pseudocount = pseudocount),
     pa = calc_pa_matrix(mat)
   )
@@ -114,4 +121,70 @@ calc_log10_matrix <- function(mat, pseudocount = 1) {
 # Presence/Absence
 calc_pa_matrix <- function(mat) {
   (mat > 0) * 1
+}
+
+# Hellinger: square root of relative abundance
+calc_hellinger_matrix <- function(mat) {
+  rel <- calc_relabundance_matrix(mat)
+  sqrt(rel)
+}
+
+#' Calculate GMPR Size Factors
+#'
+#' @description
+#' Calculates sample size factors using the Geometric Mean of Pairwise Ratios (GMPR)
+#' methodology (Chen et al. 2018), specifically tailored to zero-inflated microbiome counts.
+#'
+#' @param mat A numeric matrix of counts (taxa as rows, samples as columns).
+#' @param min_overlap Minimum number of shared non-zero taxa between sample pairs (default: 2).
+#'
+#' @return A named numeric vector of size factors.
+#' @export
+calc_gmpr_size_factors <- function(mat, min_overlap = 2) {
+  n_samp <- ncol(mat)
+  r_matrix <- matrix(NA_real_, nrow = n_samp, ncol = n_samp)
+
+  for (i in seq_len(n_samp)) {
+    x_i <- mat[, i]
+    pos_i <- x_i > 0
+    for (j in seq_len(n_samp)) {
+      if (i == j) {
+        r_matrix[i, j] <- 1
+        next
+      }
+      x_j <- mat[, j]
+      shared <- pos_i & (x_j > 0)
+      if (sum(shared) >= min_overlap) {
+        r_matrix[i, j] <- exp(mean(log(x_i[shared]) - log(x_j[shared])))
+      }
+    }
+  }
+
+  size_factors <- apply(r_matrix, 1, function(row) {
+    valid <- row[!is.na(row)]
+    if (length(valid) > 0) stats::median(valid) else NA_real_
+  })
+
+  # Fallback for samples with zero/minimal shared taxa
+  if (any(is.na(size_factors))) {
+    total_counts <- colSums(mat)
+    mean_total <- mean(total_counts[total_counts > 0])
+    fallback <- total_counts / ifelse(mean_total == 0, 1, mean_total)
+    size_factors[is.na(size_factors)] <- fallback[is.na(size_factors)]
+  }
+
+  gm <- exp(mean(log(size_factors[size_factors > 0])))
+  if (gm > 0) {
+    size_factors <- size_factors / gm
+  }
+
+  names(size_factors) <- colnames(mat)
+  size_factors
+}
+
+# GMPR Normalized Matrix
+calc_gmpr_matrix <- function(mat, min_overlap = 2) {
+  sf <- calc_gmpr_size_factors(mat, min_overlap = min_overlap)
+  sf[sf == 0] <- 1
+  sweep(mat, 2, sf, "/")
 }

@@ -2,7 +2,7 @@
 
 [![R-CMD-check](https://img.shields.io/badge/R-4.1+-blue.svg)](https://cran.r-project.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 206 passing](https://img.shields.io/badge/tests-206%20passed-success.svg)](https://github.com/tidybiome/tidybiome)
+[![Tests: 239 passing](https://img.shields.io/badge/tests-239%20passed-success.svg)](https://github.com/tidybiome/tidybiome)
 
 **`tidybiome`** is a tidyverse-native, publication-aesthetic R package designed as an up-to-date "Swiss Army knife" for downstream microbiome analysis. It adheres strictly to modern `tidyR` and `tidyverse` principles while incorporating cutting-edge methodologies from recent literature and **bioRxiv preprints (2024–2026)**.
 
@@ -137,36 +137,48 @@ plot_dbrda(dbrda_res, color = "treatment")
 net_res <- calc_network(clean_tb, method = "spearman", min_prevalence = 0.3, r_cutoff = 0.3, p_cutoff = 0.05)
 plot_network(net_res)
 
-# 9. Phylogenetic Integration & UniFrac Distances
+# 9. Compositional Heatmap with Hierarchical Clustering
+plot_heatmap(clean_tb, rank = "Genus", top_n = 15, annotation_col = "treatment")
+
+# 10. Phylogenetic Integration & UniFrac Distances
 tree <- ape::rtree(40, tip.label = attr(clean_tb, "tax_table")$taxon_id)
 clean_tb <- set_tree(clean_tb, tree)
 clean_tb <- calc_beta_diversity(clean_tb, metric = "unifrac")
 clean_tb <- calc_beta_diversity(clean_tb, metric = "wunifrac")
 
-# 10. Container Integrity Validation
+# 11. Container Integrity Validation & HTML Report Dashboard
 validate_tidy_microbiome(clean_tb, verbose = TRUE)
+report_tidybiome(clean_tb, output = "report.html", browse = FALSE)
 ```
 
 ---
 
 ## Complete API Reference
 
+### Pipeline Ingestion & Import
+| Function | Description | Key Arguments |
+| :--- | :--- | :--- |
+| `import_dada2()` | Imports DADA2 sequence table matrix/RDS and taxonomy. | `seqtab, taxa, sample_metadata, clean_names = TRUE` |
+| `import_qiime2()` | Imports QIIME 2 exported feature table, taxonomy TSV, and Newick tree. | `feature_table, taxonomy, sample_metadata, tree` |
+| `import_metaphlan()` | Parses MetaPhlAn merged abundance profile TSV with hierarchical clades. | `file, rank = "Species", sample_metadata` |
+
 ### Container & Data Wrangling
 | Function | Description | Key Arguments |
 | :--- | :--- | :--- |
-| `tidy_microbiome()` | Constructs a new synchronized `tidy_microbiome` container. | `assays`, `sample_metadata`, `tax_table`, `tree` |
+| `tidy_microbiome()` | Constructs a new synchronized `tidy_microbiome` container. | `counts, sample_data, tax_table, phy_tree` |
 | `[.tidy_microbiome` | S3 bracket subsetting (`tb[i, j]`) preserving assay column and tree tip alignment. | `x[i, j]` |
 | `filter_taxa()` | Filters taxa based on taxonomic expressions, pruning assays and tree tips. | `tb, ...` (e.g. `Phylum == "Bacteroidota"`) |
 | `validate_tidy_microbiome()` | Verifies 1:1 integrity between sample metadata, assays, taxonomy, and tree tips. | `tb, verbose = TRUE` |
 | `tidy_abundance()` | Extracts long or wide abundance tables joined with metadata and taxonomy. | `tb, assay = "counts", long = TRUE` |
-| `assay()` | Extracts or sets specific assay matrices (`counts`, `rclr`, `tss`). | `tb, name = "counts"` |
+| `assay()` | Extracts or sets specific assay matrices (`counts`, `rclr`, `tss`, `gmpr`). | `tb, name = "counts"` |
 | `tax_table()` | Extracts the taxonomic lineage table. | `tb` |
 | `aggregate_taxa()` | Agglomerates abundances to a specific taxonomic rank, preserving trees. | `tb, rank = "Genus"` |
 
 ### Normalization & Transformations
 | Function | Description | Key Arguments |
 | :--- | :--- | :--- |
-| `transform_abundance()` | Modern compositional and coverage transformations. | `tb, method = c("rclr", "tss", "coverage", "hellinger")` |
+| `transform_abundance()` | Modern compositional and coverage transformations. | `tb, method = c("rclr", "gmpr", "hellinger", "tss", "coverage")` |
+| `calc_gmpr_size_factors()` | Calculates sample size factors via Geometric Mean of Pairwise Ratios. | `mat, min_overlap = 2` |
 
 ### Diversity & Distance Metrics
 | Function | Description | Key Arguments |
@@ -208,15 +220,17 @@ validate_tidy_microbiome(clean_tb, verbose = TRUE)
 | **`mia` / `TreeSE`** | `to_tse(tb)`, `to_mia(tb)`, `as_mia(tb)`, `as_tidybiome(tse)` | Bidirectional bridge with `TreeSummarizedExperiment` S4 objects. |
 | **`ape`** | `set_tree(tb, tree)`, `get_tree(tb)` | Attaches and retrieves phylogenetic trees. |
 
-### Aesthetic Visualizations
+### Aesthetic Visualizations & Dashboards
 | Function | Description | Key Features |
 | :--- | :--- | :--- |
 | `plot_composition()` | Relative abundance stacked bar chart. | Intelligent top-$N$ pooling, soft-gray `"Other"` base bar, Okabe-Ito palette. |
+| `plot_heatmap()` | Compositional microbiome heatmap. | Hierarchical sample & taxon clustering, data scaling (log10, rclr, relative), metadata grouping. |
 | `plot_ordination()` | Ordination scatter plot. | 95% confidence ellipses, top taxon biplot loading vectors. |
 | `plot_alpha()` | Alpha diversity box/violin plot. | Jittered points, automated Wilcoxon or ANOVA significance brackets. |
 | `plot_da_volcano()` | Volcano plot for differential abundance. | Dual thresholds, top biomarker labels, agreement score sizing. |
 | `plot_dbrda()` | db-RDA constrained ordination plot. | Sample centroids and environmental constraint vector arrows. |
 | `plot_network()` | Microbial co-occurrence network plot. | Positive (blue) vs negative (coral) edges, node sizes by degree. |
+| `report_tidybiome()` | Standalone HTML diagnostic cohort dashboard. | Quality control cards, depth summary, metadata dictionary, zero external dependencies. |
 | `theme_tidybiome()` | Publication-ready ggplot2 theme. | Clean minimalist typography, light borders, subtle gridlines. |
 
 ---
@@ -228,9 +242,9 @@ The package includes a comprehensive unit test suite covering container integrit
 ```bash
 # Run the test suite:
 Rscript -e 'testthat::test_dir("tests/testthat")'
-# [ FAIL 0 | WARN 0 | SKIP 0 | PASS 206 ]
+# [ FAIL 0 | WARN 0 | SKIP 0 | PASS 239 ]
 
-# Run the 11-step end-to-end showcase:
+# Run the 12-step end-to-end showcase:
 Rscript demo/tidybiome_showcase.R
 ```
 
